@@ -1,20 +1,19 @@
 // =========================================================
-// API REST — Sistema de Indicadores e Assembleias
+// API REST — DATASABE Sistema de Designação de Indicadores
 // Conecta diretamente ao Postgres (Neon) usando a lib "pg".
-// A connection string NUNCA fica no código: vem de process.env.DATABASE_URL
 // =========================================================
+
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { Pool, types } = require('pg');
 
-// Faz o node-postgres devolver DATE como string 'YYYY-MM-DD' (OID 1082),
-// evitando o problema de fuso horário do objeto Date do JS.
 types.setTypeParser(1082, val => val);
 
 if (!process.env.DATABASE_URL) {
-  console.error('ERRO: defina DATABASE_URL no arquivo .env (veja .env.example).');
+  console.error('ERRO: defina DATABASE_URL no arquivo .env');
   process.exit(1);
 }
 
@@ -22,6 +21,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+
 pool.connect()
   .then(client => {
     console.log('✅ Conectado ao Neon PostgreSQL');
@@ -30,130 +30,101 @@ pool.connect()
   .catch(err => {
     console.error('❌ Erro ao conectar ao Neon:', err.message);
   });
+
 const app = express();
-const allowedOrigins = [
-  'https://datasabe-app.pages.dev',
-  'http://localhost:3001'
-];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  }
-}));
-
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-// ---------------------------------------------------------
-// Definição das tabelas permitidas (espelha o script SQL)
-// Nunca aceite nome de tabela/coluna vindo direto da requisição
-// sem checar contra esta lista — evita SQL injection.
-// ---------------------------------------------------------
+
 const TABLES = {
-  evento:      { pk: 'codevento',      columns: ['descricao', 'data_inicio', 'data_final'] },
-  congregacao: { pk: 'codcongregacao', columns: ['nome_congregacao'] },
-  privilegio:  { pk: 'codprivilegio',  columns: ['descricao'] },
-  setor:       { pk: 'codsetor',       columns: ['descricao', 'codevento'] },
-  pessoa:      { pk: 'codpessoa',      columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codevento', 'codcongregacao'] },
-  escalas:     { pk: 'codescala',      columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
-  contagem:    { pk: 'codcont',        columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade'] }
+  evento: { pk: 'codevento', columns: ['descricao', 'data_inicio', 'data_final'] },
+  setor: { pk: 'codsetor', columns: ['descricao', 'codevento'] },
+  congregacao: { pk: 'codcong', columns: ['nome_congregacao', 'codevento'] },
+  privilegio: { pk: 'codprivilegio', columns: ['descricao'] },
+  pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codevento', 'codcong'] },
+  escalas: { pk: 'codescala', columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
+  contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade'] },
+  usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] }
 };
-
-function getTableDef(name) {
-  const def = TABLES[name];
-  if (!def) {
-    const err = new Error(`Tabela "${name}" não existe.`);
-    err.status = 404;
-    throw err;
-  }
-  return def;
-}
-
-function handleError(res, err) {
-  if (err.code === '23503') {
-    return res.status(409).json({ error: 'Não é possível excluir: existem registros vinculados em outra tabela.' });
-  }
-  if (err.code === '23502') {
-    return res.status(400).json({ error: 'Existe um campo obrigatório não preenchido.' });
-  }
-  if (err.status) {
-    return res.status(err.status).json({ error: err.message });
-  }
-  console.error(err);
-  return res.status(500).json({ error: 'Erro interno no servidor.' });
-}
-
-// ---------------------------------------------------------
-// GET /api/:table -> lista todos os registros
-// ---------------------------------------------------------
-app.get('/api/:table', async (req, res) => {
-  try {
-    const def = getTableDef(req.params.table);
-    const { rows } = await pool.query(`SELECT * FROM ${req.params.table} ORDER BY ${def.pk} ASC`);
-    res.json(rows);
-  } catch (err) { handleError(res, err); }
-});
-
-// ---------------------------------------------------------
-// POST /api/:table -> cria um registro
-// ---------------------------------------------------------
-app.post('/api/:table', async (req, res) => {
-  try {
-    const table = req.params.table;
-    const def = getTableDef(table);
-    const cols = def.columns.filter(c => req.body[c] !== undefined);
-    if (cols.length === 0) { return res.status(400).json({ error: 'Nenhum campo válido enviado.' }); }
-    const values = cols.map(c => req.body[c]);
-    const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-    const sql = `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-    const { rows } = await pool.query(sql, values);
-    res.status(201).json(rows[0]);
-  } catch (err) { handleError(res, err); }
-});
-
-// ---------------------------------------------------------
-// PUT /api/:table/:id -> atualiza um registro existente
-// ---------------------------------------------------------
-app.put('/api/:table/:id', async (req, res) => {
-  try {
-    const table = req.params.table;
-    const def = getTableDef(table);
-    const cols = def.columns.filter(c => req.body[c] !== undefined);
-    if (cols.length === 0) { return res.status(400).json({ error: 'Nenhum campo válido enviado.' }); }
-    const setClause = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
-    const values = cols.map(c => req.body[c]);
-    values.push(req.params.id);
-    const sql = `UPDATE ${table} SET ${setClause} WHERE ${def.pk} = $${values.length} RETURNING *`;
-    const { rows } = await pool.query(sql, values);
-    if (rows.length === 0) { return res.status(404).json({ error: 'Registro não encontrado.' }); }
-    res.json(rows[0]);
-  } catch (err) { handleError(res, err); }
-});
-
-// ---------------------------------------------------------
-// DELETE /api/:table/:id -> remove um registro
-// ---------------------------------------------------------
-app.delete('/api/:table/:id', async (req, res) => {
-  try {
-    const table = req.params.table;
-    const def = getTableDef(table);
-    await pool.query(`DELETE FROM ${table} WHERE ${def.pk} = $1`, [req.params.id]);
-    res.status(204).end();
-  } catch (err) { handleError(res, err); }
-});
 
 app.get('/api/health/check', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', database: 'conectado' });
+    res.json({ status: 'ok' });
   } catch (err) {
-    res.status(500).json({ status: 'erro', database: 'desconectado' });
+    res.status(500).json({ status: 'error', error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API rodando em http://localhost:${PORT}`));
+Object.keys(TABLES).forEach(tableName => {
+  const cfg = TABLES[tableName];
+
+  app.get(`/api/${tableName}`, async (req, res) => {
+    try {
+      const result = await pool.query(`SELECT * FROM ${tableName} ORDER BY ${cfg.pk} ASC`);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get(`/api/${tableName}/:id`, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(`SELECT * FROM ${tableName} WHERE ${cfg.pk} = $1`, [id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado.' });
+      res.json(result.rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post(`/api/${tableName}`, async (req, res) => {
+    try {
+      const cols = cfg.columns;
+      const values = cols.map(c => req.body[c] !== undefined ? req.body[c] : null);
+      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+
+      const query = `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`;
+      const result = await pool.query(query, values);
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.put(`/api/${tableName}/:id`, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const cols = cfg.columns;
+      const setClause = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
+      const values = cols.map(c => req.body[c] !== undefined ? req.body[c] : null);
+      values.push(id);
+
+      const query = `UPDATE ${tableName} SET ${setClause} WHERE ${cfg.pk} = $${values.length} RETURNING *`;
+      const result = await pool.query(query, values);
+
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado.' });
+      res.json(result.rows[0]);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete(`/api/${tableName}/:id`, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(`DELETE FROM ${tableName} WHERE ${cfg.pk} = $1 RETURNING *`, [id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado.' });
+      res.status(204).send();
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+});

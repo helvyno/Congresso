@@ -1,7 +1,7 @@
 {
   "name": "sistema-indicadores-api",
   "version": "1.0.0",
-  "description": "API REST + servidor de arquivos estáticos para o Sistema de Controle de Indicadores e Assembleias (Neon/Postgres)",
+  "description": "API REST + servidor estático para DATASABE",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
