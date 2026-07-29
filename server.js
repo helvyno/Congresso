@@ -22,21 +22,32 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
-
+pool.connect()
+  .then(client => {
+    console.log('✅ Conectado ao Neon PostgreSQL');
+    client.release();
+  })
+  .catch(err => {
+    console.error('❌ Erro ao conectar ao Neon:', err.message);
+  });
 const app = express();
 const allowedOrigins = [
-  'https://datasabe-app.pages.dev',   // URL que o Cloudflare Pages vai gerar
-  'http://localhost:3001'              // para testes locais
+  'https://datasabe-app.pages.dev',
+  'http://localhost:3001'
 ];
+
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
+    }
+  }
+}));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
 // ---------------------------------------------------------
 // Definição das tabelas permitidas (espelha o script SQL)
 // Nunca aceite nome de tabela/coluna vindo direto da requisição
