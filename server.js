@@ -44,9 +44,28 @@ const TABLES = {
   privilegio: { pk: 'codprivilegio', columns: ['descricao'] },
   pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codevento', 'codcong'] },
   escalas: { pk: 'codescala', columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
-  contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade'] },
+  contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade', 'data'] },
   usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] }
 };
+
+function sanitizeBody(body) {
+  const sanitized = {};
+  for (const key of Object.keys(body)) {
+    const val = body[key];
+    if (typeof val === 'string') {
+      if (key === 'email') {
+        sanitized[key] = val.trim().toLowerCase();
+      } else if (key === 'data' || key === 'data_inicio' || key === 'data_final') {
+        sanitized[key] = val;
+      } else {
+        sanitized[key] = val.trim().toUpperCase();
+      }
+    } else {
+      sanitized[key] = val;
+    }
+  }
+  return sanitized;
+}
 
 app.get('/api/health/check', async (req, res) => {
   try {
@@ -82,14 +101,16 @@ Object.keys(TABLES).forEach(tableName => {
 
   app.post(`/api/${tableName}`, async (req, res) => {
     try {
+      const cleanBody = sanitizeBody(req.body);
       const cols = cfg.columns;
-      const values = cols.map(c => req.body[c] !== undefined ? req.body[c] : null);
+      const values = cols.map(c => cleanBody[c] !== undefined ? cleanBody[c] : null);
       const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
 
       const query = `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`;
       const result = await pool.query(query, values);
       res.status(201).json(result.rows[0]);
     } catch (err) {
+      console.error(`Erro no POST /api/${tableName}:`, err.message);
       res.status(400).json({ error: err.message });
     }
   });
@@ -97,9 +118,10 @@ Object.keys(TABLES).forEach(tableName => {
   app.put(`/api/${tableName}/:id`, async (req, res) => {
     try {
       const { id } = req.params;
+      const cleanBody = sanitizeBody(req.body);
       const cols = cfg.columns;
       const setClause = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
-      const values = cols.map(c => req.body[c] !== undefined ? req.body[c] : null);
+      const values = cols.map(c => cleanBody[c] !== undefined ? cleanBody[c] : null);
       values.push(id);
 
       const query = `UPDATE ${tableName} SET ${setClause} WHERE ${cfg.pk} = $${values.length} RETURNING *`;
