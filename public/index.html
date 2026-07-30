@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DATASABE - Sistema de Designação de Indicadores</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family: 'Inter', sans-serif; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .nav-btn.active { background-color: #3b82f6; color: white; }
+  .nav-btn { color: #94a3b8; }
+  .nav-btn:hover:not(.active) { background-color: #334155; color: white; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0f172a; }
+  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  .field-error { border-color: #ef4444 !important; }
+  .nav-count { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.08); padding: 1px 7px; border-radius: 9999px; margin-left: auto; }
+  .nav-btn.active .nav-count { background: rgba(255,255,255,.22); }
+</style>
+</head>
+<body class="bg-[#0f172a] text-white min-h-screen flex flex-col">
+
+  <header id="main-header" class="bg-[#1e293b] border-b border-[#334155] px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 shadow-md">
+    <div class="flex items-center gap-3">
+      <button onclick="toggleSidebar()" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-[#0f172a] border border-[#334155] text-[#94a3b8] hover:text-white transition-colors" title="Ocultar/Exibir Menu">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      </button>
+      <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-lg border border-[#334155] bg-white">
+      <div>
+        <h1 class="text-lg font-bold text-white tracking-tight">DATASABE</h1>
+        <p class="text-xs text-[#94a3b8] hidden sm:block">Sistema de Designação de Indicadores</p>
+      </div>
+    </div>
+
+    <div id="evento-filter-wrapper" class="flex items-center gap-2 bg-[#0f172a] px-3 py-1.5 rounded-lg border border-[#334155]">
+      <span class="text-xs text-[#94a3b8] font-medium whitespace-nowrap">Evento Ativo:</span>
+      <select id="global-evento-filter" onchange="changeGlobalEvento(this.value)" class="bg-transparent text-sm font-semibold text-[#3b82f6] focus:outline-none cursor-pointer">
+        <option value="">Carregando eventos...</option>
+      </select>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span id="db-status" class="text-xs text-[#94a3b8] flex items-center gap-1.5 whitespace-nowrap">
+        <span class="w-2 h-2 rounded-full bg-[#64748b]"></span> verificando…
+      </span>
+    </div>
+  </header>
+
+  <div class="flex flex-row flex-1 min-h-[calc(100vh-65px)] overflow-hidden relative">
+    <aside id="sidebar-nav" class="w-56 md:w-64 flex-shrink-0 bg-[#1e293b] border-r border-[#334155] p-3 md:p-4 overflow-y-auto transition-all duration-300 z-40">
+      <nav id="nav" class="flex flex-col gap-1"></nav>
+    </aside>
+
+    <main class="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+      <div id="tabs-root"></div>
+    </main>
+  </div>
+
+  <div id="modal-form" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+    <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-1">
+        <h3 id="modal-title" class="text-lg font-bold text-white">Novo registro</h3>
+        <button onclick="closeModal('modal-form')" class="text-[#94a3b8] hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <p id="modal-sub" class="text-xs text-[#94a3b8] mb-5"></p>
+      <form id="entity-form" class="space-y-4">
+        <div id="modal-fields"></div>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" id="modal-save-btn" class="flex-1 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors">Salvar</button>
+          <button type="button" onclick="closeModal('modal-form')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-[#94a3b8] border border-[#334155] hover:bg-[#334155]">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-6 right-6 bg-[#1e293b] border border-[#334155] px-5 py-3 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-300 z-50 max-w-sm">
+    <span id="toast-msg" class="text-sm text-white">Operação realizada com sucesso!</span>
+  </div>
+
+<script>
+const API_BASE = 'https://congresso-5p1a.onrender.com';
+const urlParams = new URLSearchParams(window.location.search);
+const isPublicView = urlParams.get('view') === 'public';
+let sidebarOpen = window.innerWidth >= 768;
+
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  const sidebar = document.getElementById('sidebar-nav');
+  if(!sidebar) return;
+  if(sidebarOpen){
+    sidebar.classList.remove('hidden');
+    sidebar.style.width = '16rem';
+  } else {
+    sidebar.classList.add('hidden');
+  }
+}
+
+const ICONS = {
+  home: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>',
+  evento: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
+  setor: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>',
+  congregacao: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"></path>',
+  privilegio: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-2a9 9 0 11-18 0c0-1.657.507-3.195 1.374-4.468M12 3c2.5 0 4.847.99 6.573 2.75"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"></path>',
+  pessoa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>',
+  escalas: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
+  designacoes: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
+  contagem: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l7-3v13M9 19l-6 2V8l6-2m0 13l7-2M16 19l6-2V4l-6 2"></path>',
+  usuario: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>'
+};
+
+const ENTITIES = [
+  { key:'home', label:'Início', plural:'Dashboard', isHome:true },
+  { key:'designacoes', label:'Designação', plural:'Designações', isCustom:true },
+  { key:'evento', label:'Evento', plural:'Eventos', pk:'codevento', display:r=>r.descricao, fields:[
+    {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Congresso Regional 2026'},
+    {name:'data_inicio', label:'Data início', type:'date', required:true},
+    {name:'data_final', label:'Data final', type:'date', required:true}
+  ]},
+  { key:'setor', label:'Setor', plural:'Setores', pk:'codsetor', display:r=>r.descricao, fields:[
+    {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Portaria Principal'},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true}
+  ]},
+  { key:'congregacao', label:'Congregação', plural:'Congregações', pk:'codcong', display:r=>r.nome_congregacao, fields:[ 
+    {name:'nome_congregacao', label:'Nome da congregação', type:'text', required:true, placeholder:'Ex.: CENTRAL'},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true}
+  ]},
+  { key:'privilegio', label:'Privilégio', plural:'Privilégios', pk:'codprivilegio', display:r=>r.descricao, isGlobal:true, fields:[ 
+    {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Coordenador de setor'} 
+  ]},
+  { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', display:r=>r.nomecompleto, fields:[
+    {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
+    {name:'telefone', label:'Telefone', type:'text', required:false, placeholder:'(34) 90000-0000'},
+    {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true}
+  ]},
+  { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true, searchable:true},
+    {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
+    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true},
+    {name:'hora_inicio', label:'Hora início', type:'time', required:true},
+    {name:'hora_fim', label:'Hora fim', type:'time', required:true}
+  ]},
+  { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', display:r=>String(r.quantidade), fields:[
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true},
+    {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
+    {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true},
+    {name:'quantidade', label:'Quantidade', type:'number', required:true, placeholder:'0'}
+  ]},
+  { key:'usuario', label:'Usuário', plural:'Usuários', pk:'codusuario', isGlobal:true, display:r=>r.nome, fields:[
+    {name:'nome', label:'Nome', type:'text', required:true, placeholder:'Nome do usuário'},
+    {name:'email', label:'E-mail', type:'text', required:true, placeholder:'email@datasabesistemas.com.br'},
+    {name:'senha', label:'Senha', type:'text', required:true, placeholder:'Senha de acesso'},
+    {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
+  ]}
+];
+
+let db = {};
+let current = isPublicView ? 'designacoes' : 'home';
+let globalEventoId = null;
+let dashboardDataFilter = '';
+let designacaoDataFilter = '';
+let modalState = { key:null, editingId:null };
+
+function formatDateBR(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function entity(key){ return ENTITIES.find(e=>e.key===key); }
+function findRecord(key,id){ return (db[key]||[]).find(r=>r[entity(key).pk]===id); }
+function refLabel(refKey,id){
+  const ent = entity(refKey), rec = findRecord(refKey,id);
+  return rec ? ent.display(rec) : `#${id}`;
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function apiList(table){
+  const r = await fetch(`${API_BASE}/api/${table}`);
+  if(!r.ok) throw new Error('Falha ao carregar ' + table);
+  return r.json();
+}
+async function apiCreate(table, body){
+  const r = await fetch(`${API_BASE}/api/${table}`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error || 'Falha ao criar registro.');
+  return data;
+}
+async function apiUpdate(table, id, body){
+  const r = await fetch(`${API_BASE}/api/${table}/${id}`, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error || 'Falha ao atualizar registro.');
+  return data;
+}
+async function apiDelete(table, id){
+  const r = await fetch(`${API_BASE}/api/${table}/${id}`, { method:'DELETE' });
+  if(r.status===204) return true;
+  const data = await r.json().catch(()=>({}));
+  throw new Error(data.error || 'Falha ao excluir registro.');
+}
+
+async function checkDbStatus(){
+  const el = document.getElementById('db-status');
+  if(!el) return;
+  try{
+    const r = await fetch(`${API_BASE}/api/health/check`);
+    const data = await r.json();
+    if(r.ok && data.status==='ok'){
+      el.innerHTML = '<span class="w-2 h-2 rounded-full bg-[#10b981]"></span> Neon conectado';
+    } else { throw new Error(); }
+  }catch(err){
+    el.innerHTML = '<span class="w-2 h-2 rounded-full bg-[#ef4444]"></span> Sem conexão';
+  }
+}
+
+async function loadDB(){
+  try{
+    const results = await Promise.all(ENTITIES.filter(e=>!e.isHome && !e.isCustom).map(e=>apiList(e.key)));
+    let idx = 0;
+    ENTITIES.forEach((e)=>{
+      if(!e.isHome && !e.isCustom){
+        db[e.key] = results[idx++];
+      }
+    });
+  }catch(err){
+    showToast('Não foi possível carregar os dados da API.');
+    ENTITIES.forEach(e=>{ if(!e.isHome && !e.isCustom) db[e.key] = []; });
+  }
+  
+  initGlobalEvento();
+  buildLayout();
+  checkDbStatus();
+
+  if(isPublicView){
+    const sidebar = document.getElementById('sidebar-nav');
+    if(sidebar) sidebar.style.display = 'none';
+  } else if(window.innerWidth < 768){
+    sidebarOpen = false;
+    const sidebar = document.getElementById('sidebar-nav');
+    if(sidebar) sidebar.classList.add('hidden');
+  }
+}
+
+function initGlobalEvento(){
+  const eventos = db['evento'] || [];
+  const select = document.getElementById('global-evento-filter');
+  if(!select) return;
+  if(eventos.length === 0){
+    select.innerHTML = '<option value="">Nenhum evento cadastrado</option>';
+    globalEventoId = null;
+    return;
+  }
+  select.innerHTML = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
+  if(!globalEventoId || !eventos.some(e => e.codevento == globalEventoId)){
+    globalEventoId = eventos[0].codevento;
+  }
+  select.value = globalEventoId;
+  updateDashboardDateOptions();
+}
+
+function updateDashboardDateOptions(){
+  const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
+  const selectDate = document.getElementById('dashboard-date-filter');
+  if(!selectDate) return;
+
+  if(!ev || !ev.data_inicio || !ev.data_final){
+    selectDate.innerHTML = '<option value="">Sem datas configuradas</option>';
+    dashboardDataFilter = '';
+    return;
+  }
+
+  const dates = [];
+  let curr = new Date(ev.data_inicio + 'T00:00:00');
+  const end = new Date(ev.data_final + 'T00:00:00');
+  while(curr <= end){
+    dates.push(curr.toISOString().split('T')[0]);
+    curr.setDate(curr.getDate() + 1);
+  }
+
+  if(!dates.includes(dashboardDataFilter)){
+    dashboardDataFilter = dates[0] || '';
+  }
+
+  selectDate.innerHTML = dates.map(d => `<option value="${d}" ${d===dashboardDataFilter?'selected':''}>${formatDateBR(d)}</option>`).join('');
+}
+
+function changeGlobalEvento(val){
+  globalEventoId = val ? Number(val) : null;
+  updateDashboardDateOptions();
+  designacaoDataFilter = '';
+  renderCurrentTab();
+  updateCounts();
+}
+
+function changeDashboardDate(val){
+  dashboardDataFilter = val;
+  renderDashboard();
+}
+
+function changeDesignacaoDate(val){
+  designacaoDataFilter = val;
+  renderDesignacoes();
+}
+
+function buildLayout(){
+  const nav = document.getElementById('nav');
+  if(!nav) return;
+
+  const visibleEntities = isPublicView ? ENTITIES.filter(e => e.key === 'designacoes') : ENTITIES;
+
+  nav.innerHTML = visibleEntities.map(e=>`
+    <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[e.key] || ICONS.evento}</svg>
+      <span class="truncate">${e.plural}</span>
+      ${!e.isHome && !e.isCustom ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
+    </button>
+  `).join('');
+
+  const root = document.getElementById('tabs-root');
+  root.innerHTML = ENTITIES.map(e=>{
+    if(e.isHome){
+      return `<div id="tab-home" class="tab-content ${current==='home'?'active':''}"></div>`;
+    }
+    if(e.isCustom){
+      return `<div id="tab-designacoes" class="tab-content ${current==='designacoes'?'active':''}"></div>`;
+    }
+    return `
+      <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+        <div class="mb-6 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="text-2xl font-bold text-white mb-1">${e.plural}</h2>
+            <p class="text-[#94a3b8] text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
+          </div>
+          ${e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            Novo ${e.label}
+          </button>` : `<button onclick="openEntityModal('evento')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">Novo Evento</button>`}
+        </div>
+        <div class="mb-4 flex items-center gap-3 flex-wrap">
+          <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+            class="w-full sm:w-72 bg-[#0f172a] border border-[#334155] rounded-lg px-4 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+          ${e.key === 'escalas' ? `<input type="text" placeholder="Buscar por pessoa…" oninput="onSearchPessoaEscala(this.value)" class="w-full sm:w-72 bg-[#0f172a] border border-[#334155] rounded-lg px-4 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">` : ''}
+        </div>
+        <div class="bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-[#0f172a]/50 text-left text-xs text-[#94a3b8] uppercase tracking-wider">
+                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...e.fields.map(f=>f.label), ''].map(h=>`<th class="px-6 py-3">${h}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody id="tabela-${e.key}"></tbody>
+            </table>
+          </div>
+          <div id="empty-${e.key}" class="hidden text-center text-[#64748b] text-sm py-12"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  ENTITIES.filter(e=>!e.isHome && !e.isCustom).forEach(e=>{ e._search=''; e._searchPessoa=''; });
+  renderCurrentTab();
+  updateCounts();
+}
+
+function showTab(key){
+  current = key;
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  const targetTab = document.getElementById('tab-'+key);
+  if(targetTab) targetTab.classList.add('active');
+  
+  document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
+  const targetNav = document.getElementById('nav-'+key);
+  if(targetNav) targetNav.classList.add('active');
+  
+  renderCurrentTab();
+}
+
+function renderCurrentTab(){
+  if(current === 'home'){
+    renderDashboard();
+  } else if(current === 'designacoes'){
+    renderDesignacoes();
+  } else {
+    renderTable(current);
+  }
+}
+
+function renderDashboard(){
+  const tabHome = document.getElementById('tab-home');
+  if(!tabHome) return;
+
+  const evId = globalEventoId;
+  const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
+  const congs = (db['congregacao']||[]).filter(c => !evId || c.codevento == evId);
+  const pessoas = (db['pessoa']||[]).filter(p => !evId || p.codevento == evId);
+  const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
+  const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
+
+  const contagensFiltradas = contagens.filter(ct => {
+    return dashboardDataFilter && ct.data === dashboardDataFilter;
+  });
+
+  const totalQuantidade = contagensFiltradas.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+
+  let contagensPorSetorHtml = setores.map(s => {
+    const qtSetor = contagensFiltradas.filter(c => c.codsetor == s.codsetor).reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+    return `<div class="flex justify-between items-center py-2 border-b border-[#334155]/50 text-sm">
+      <span class="text-[#cbd5e1]">${escapeHtml(s.descricao)}</span>
+      <span class="font-mono font-semibold text-[#3b82f6]">${qtSetor}</span>
+    </div>`;
+  }).join('') || '<p class="text-xs text-[#64748b]">Nenhum setor cadastrado para este evento.</p>';
+
+  const setoresComContagemNoDia = new Set(contagensFiltradas.filter(c => Number(c.quantidade) > 0).map(c => c.codsetor));
+  const setoresPendentes = setores.filter(s => !setoresComContagemNoDia.has(s.codsetor));
+
+  let setoresPendentesHtml = setoresPendentes.length > 0 
+    ? setoresPendentes.map(s => `<span class="inline-block bg-[#ef4444]/10 text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5">${escapeHtml(s.descricao)}</span>`).join('')
+    : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta data!</p>';
+
+  tabHome.innerHTML = `
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-2xl font-bold text-white mb-1">Dashboard do Evento</h2>
+        <p class="text-[#94a3b8] text-sm">Resumo estatístico e contagens por data do evento</p>
+      </div>
+      <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
+        <span class="text-xs text-[#94a3b8] font-medium">Data do Evento:</span>
+        <select id="dashboard-date-filter" onchange="changeDashboardDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+          <option value="">Carregando datas...</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Setores</p>
+        <p class="text-3xl font-bold text-white">${setores.length}</p>
+      </div>
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Congregações</p>
+        <p class="text-3xl font-bold text-white">${congs.length}</p>
+      </div>
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Pessoas</p>
+        <p class="text-3xl font-bold text-white">${pessoas.length}</p>
+      </div>
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Escalas</p>
+        <p class="text-3xl font-bold text-white">${escalas.length}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6">
+        <h3 class="text-base font-bold text-white mb-4 flex items-center justify-between">
+          <span>Contagem por Setor (Data Selecionada)</span>
+          <span class="text-xs font-normal text-[#3b82f6] bg-[#3b82f6]/10 px-2 py-1 rounded">Total Geral: ${totalQuantidade}</span>
+        </h3>
+        <div class="max-h-64 overflow-y-auto pr-1">
+          ${contagensPorSetorHtml}
+        </div>
+      </div>
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 flex flex-col justify-between">
+        <div>
+          <h3 class="text-base font-bold text-white mb-2">Setores Pendentes de Contagem</h3>
+          <p class="text-sm text-[#94a3b8] mb-4">Setores que ainda não informaram a contagem na data selecionada:</p>
+        </div>
+        <div class="bg-[#0f172a] p-4 rounded-lg border border-[#334155] min-h-[100px]">
+          ${setoresPendentesHtml}
+        </div>
+      </div>
+    </div>
+  `;
+  updateDashboardDateOptions();
+  const dateEl = document.getElementById('dashboard-date-filter');
+  if(dateEl) dateEl.value = dashboardDataFilter;
+}
+
+function renderDesignacoes(){
+  const tabDes = document.getElementById('tab-designacoes');
+  if(!tabDes) return;
+
+  const evId = globalEventoId;
+  let escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
+
+  escalas.sort((a, b) => {
+    if (a.data !== b.data) return (a.data || '').localeCompare(b.data || '');
+    const setorA = refRelationDescricao('setor', a.codsetor);
+    const setorB = refRelationDescricao('setor', b.codsetor);
+    if (setorA !== setorB) return setorA.localeCompare(setorB);
+    return (a.hora_inicio || '').localeCompare(b.hora_inicio || '');
+  });
+
+  let escalasFiltradas = [];
+  if (designacaoDataFilter) {
+    escalasFiltradas = escalas.filter(es => es.data === designacaoDataFilter);
+  }
+
+  const searchQuery = (window._designacaoSearchPessoa || '').toLowerCase();
+  if (searchQuery) {
+    escalasFiltradas = escalasFiltradas.filter(es => {
+      const pessoa = findRecord('pessoa', es.codpessoa);
+      const nome = pessoa ? pessoa.nomecompleto.toLowerCase() : '';
+      return nome.includes(searchQuery);
+    });
+  }
+
+  let rowsHtml = escalasFiltradas.map(es => {
+    const pessoa = findRecord('pessoa', es.codpessoa);
+    const setor = findRecord('setor', es.codsetor);
+    const nomePessoa = pessoa ? escapeHtml(pessoa.nomecompleto) : 'Pessoa não encontrada';
+    const nomeSetor = setor ? escapeHtml(setor.descricao) : 'Setor não encontrado';
+    const telefone = pessoa && pessoa.telefone ? pessoa.telefone : '';
+    const dataFmt = formatDateBR(es.data);
+    const horaInicio = es.hora_inicio || '';
+    const horaFim = es.hora_fim || '';
+
+    let telLink = '—';
+    if(telefone){
+      const cleanTel = telefone.replace(/\D/g, '');
+      const waNum = cleanTel.startsWith('55') ? cleanTel : '55' + cleanTel;
+      telLink = `<a href="https://api.whatsapp.com/send?phone=${waNum}" target="_blank" class="text-[#10b981] hover:underline flex items-center gap-1.5 font-medium">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+        ${escapeHtml(telefone)}
+      </a>`;
+    }
+
+    return `<tr class="hover:bg-[#334155]/30 transition-colors border-t border-[#334155]/60">
+      <td class="px-6 py-4 font-mono text-[#3b82f6]">${dataFmt}</td>
+      <td class="px-6 py-4 text-white font-medium">${nomePessoa}</td>
+      <td class="px-6 py-4 text-[#cbd5e1]">${nomeSetor}</td>
+      <td class="px-6 py-4 font-mono text-[#cbd5e1]">${horaInicio}</td>
+      <td class="px-6 py-4 font-mono text-[#cbd5e1]">${horaFim}</td>
+      <td class="px-6 py-4">${telLink}</td>
+    </tr>`;
+  }).join('');
+
+  const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
+  let dateOptionsHtml = '<option value="">Selecione uma data…</option>';
+  if(ev && ev.data_inicio && ev.data_final){
+    let curr = new Date(ev.data_inicio + 'T00:00:00');
+    const end = new Date(ev.data_final + 'T00:00:00');
+    while(curr <= end){
+      const dStr = curr.toISOString().split('T')[0];
+      dateOptionsHtml += `<option value="${dStr}" ${dStr===designacaoDataFilter?'selected':''}>${formatDateBR(dStr)}</option>`;
+      curr.setDate(curr.getDate() + 1);
+    }
+  }
+
+  tabDes.innerHTML = `
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-2xl font-bold text-white mb-1">Designações de Indicadores</h2>
+        <p class="text-[#94a3b8] text-sm">Escalas e contato direto via WhatsApp</p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        ${!isPublicView ? `<button onclick="copyPublicLink()" class="bg-[#10b981] hover:bg-[#059669] text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+          Copiar Link Público
+        </button>` : ''}
+        <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
+          <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
+          <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+            ${dateOptionsHtml}
+          </select>
+        </div>
+        <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+      </div>
+    </div>
+
+    <div class="bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-[#0f172a]/50 text-left text-xs text-[#94a3b8] uppercase tracking-wider">
+              <th class="px-6 py-3">Data</th>
+              <th class="px-6 py-3">Pessoa</th>
+              <th class="px-6 py-3">Setor</th>
+              <th class="px-6 py-3">Início</th>
+              <th class="px-6 py-3">Fim</th>
+              <th class="px-6 py-3">Telefone (WhatsApp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${!designacaoDataFilter ? `<tr><td colspan="6" class="text-center text-[#64748b] py-12">Selecione uma data para visualizar as designações.</td></tr>` : (rowsHtml || `<tr><td colspan="6" class="text-center text-[#64748b] py-12">Nenhuma designação encontrada para a data selecionada.</td></tr>`)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  const desDateEl = document.getElementById('designacao-date-filter');
+  if(desDateEl) desDateEl.value = designacaoDataFilter;
+}
+
+function refRelationDescricao(refKey, id){
+  const ent = entity(refKey), rec = findRecord(refKey, id);
+  return rec ? ent.display(rec) : '';
+}
+
+function onSearchDesignacaoPessoa(val){
+  window._designacaoSearchPessoa = val;
+  renderDesignacoes();
+}
+
+function copyPublicLink(){
+  const url = window.location.origin + window.location.pathname + '?view=public';
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('Link público copiado com sucesso!');
+  }).catch(() => {
+    showToast('Erro ao copiar o link.');
+  });
+}
+
+function updateCounts(){
+  const evId = globalEventoId;
+  ENTITIES.filter(e=>!e.isHome && !e.isCustom).forEach(e=>{
+    const el = document.getElementById('nav-count-'+e.key);
+    if(el){
+      const filtered = (db[e.key]||[]).filter(r => e.isGlobal || r.codevento == evId);
+      el.textContent = filtered.length;
+    }
+  });
+}
+
+function onSearch(key, value){
+  entity(key)._search = value.toLowerCase();
+  renderTable(key);
+}
+
+function onSearchPessoaEscala(value){
+  entity('escalas')._searchPessoa = value.toLowerCase();
+  renderTable('escalas');
+}
+
+function renderTable(key){
+  const ent = entity(key);
+  const tbody = document.getElementById('tabela-'+key);
+  const emptyEl = document.getElementById('empty-'+key);
+  let rows = db[key] || [];
+
+  if(!ent.isGlobal && key !== 'evento'){
+    rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
+  }
+
+  if(ent._search){
+    const q = ent._search;
+    rows = rows.filter(r=>{
+      return ent.fields.some(f=>{
+        let v = f.type==='fk' ? refLabel(f.ref, r[f.name]) : r[f.name];
+        if(f.type==='date') v = formatDateBR(v);
+        return String(v||'').toLowerCase().includes(q);
+      }) || String(r[ent.pk]).includes(q);
+    });
+  }
+
+  if(key === 'escalas' && ent._searchPessoa){
+    const qPessoa = ent._searchPessoa;
+    rows = rows.filter(r => {
+      const p = findRecord('pessoa', r.codpessoa);
+      return p && p.nomecompleto.toLowerCase().includes(qPessoa);
+    });
+  }
+
+  const tableEl = tbody.closest('table');
+  if((db[key]||[]).length===0){
+    tbody.innerHTML=''; tableEl.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    emptyEl.innerHTML = `Nenhum registro em <b class="text-white">${ent.plural}</b> ainda.`;
+    return;
+  }
+  tableEl.classList.remove('hidden');
+  if(rows.length===0){
+    tbody.innerHTML='';
+    emptyEl.classList.remove('hidden');
+    emptyEl.innerHTML = `Nenhum registro encontrado.`;
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  tbody.innerHTML = rows.map(r=>{
+    const cells = ent.fields.map(f=>{
+      if(f.type==='fk'){
+        return `<td class="px-6 py-4 text-[#cbd5e1]">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-[#64748b] font-mono text-xs">#${r[f.name]}</span></td>`;
+      }
+      let val = r[f.name];
+      if(f.type==='date') val = formatDateBR(val);
+      return `<td class="px-6 py-4 text-[#cbd5e1]">${val!==undefined && val!==null && val!=='' ? escapeHtml(String(val)) : '—'}</td>`;
+    }).join('');
+    return `<tr class="hover:bg-[#334155]/30 transition-colors border-t border-[#334155]/60">
+      <td class="px-6 py-4 font-mono text-[#3b82f6]">${r[ent.pk]}</td>
+      ${cells}
+      <td class="px-6 py-4 whitespace-nowrap">
+        <button onclick="openEntityModal('${key}', ${r[ent.pk]})" class="text-[#3b82f6] hover:text-[#60a5fa] text-xs font-medium mr-3">Editar</button>
+        <button onclick="deleteRecord('${key}', ${r[ent.pk]})" class="text-[#ef4444] hover:text-[#f87171] text-xs font-medium">Excluir</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openEntityModal(key, id){
+  const ent = entity(key);
+  modalState = { key, editingId: id!==undefined ? id : null };
+  const record = id!==undefined ? findRecord(key,id) : null;
+
+  document.getElementById('modal-title').textContent = record ? `Editar ${ent.label}` : `Novo ${ent.label}`;
+  document.getElementById('modal-sub').textContent = `Preencha os campos de ${ent.plural.toLowerCase()}.`;
+
+  const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
+
+  const fieldsEl = document.getElementById('modal-fields');
+  fieldsEl.innerHTML = ent.fields.map(f=>{
+    let val = record ? record[f.name] : '';
+    if(!record && !ent.isGlobal && f.fixedToGlobal && globalEventoId && f.name === 'codevento'){
+      val = globalEventoId;
+    }
+
+    let control;
+    const base = "w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]";
+    
+    if(f.type==='fk'){
+      const refEnt = entity(f.ref);
+      let refList = db[f.ref] || [];
+      if(!refEnt.isGlobal && f.fixedToGlobal && globalEventoId){
+        refList = refList.filter(r => r.codevento == globalEventoId);
+      }
+      const opts = refList.map(r=>{
+        const rid = r[refEnt.pk];
+        return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
+      }).join('');
+      
+      if(f.fixedToGlobal && !ent.isGlobal){
+        control = `<select data-field="${f.name}" class="${base} bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</option></select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
+      } else {
+        control = `<select data-field="${f.name}" class="${base}"><option value="">Selecione…</option>${opts}</select>`;
+      }
+    } else if(f.type==='date'){
+      let minAttr = '';
+      let maxAttr = '';
+      if(f.limitToEvent && ev && ev.data_inicio && ev.data_final){
+        minAttr = `min="${ev.data_inicio}"`;
+        maxAttr = `max="${ev.data_final}"`;
+        if(!val) val = ev.data_inicio;
+      }
+      control = `<input type="date" data-field="${f.name}" value="${val||''}" ${minAttr} ${maxAttr} class="${base}">`;
+    } else if(f.type==='time'){
+      control = `<input type="time" data-field="${f.name}" value="${val||''}" class="${base}">`;
+    } else if(f.type==='number'){
+      control = `<input type="number" data-field="${f.name}" value="${val!==undefined && val!==null ? val : ''}" placeholder="${f.placeholder||''}" class="${base}">`;
+    } else {
+      control = `<input type="text" data-field="${f.name}" value="${escapeHtml(val||'')}" placeholder="${f.placeholder||''}" class="${base}" oninput="this.value = this.value.toUpperCase()">`;
+    }
+    return `<div data-field-wrap="${f.name}">
+      <label class="block text-xs font-medium text-[#94a3b8] mb-1.5">${f.label}${f.required ? ' <span class="text-[#ef4444]">*</span>':''}</label>
+      ${control}
+      <p class="err-msg hidden text-xs text-[#ef4444] mt-1 font-mono"></p>
+    </div>`;
+  }).join('');
+
+  openModal('modal-form');
+}
+
+document.getElementById('entity-form').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const { key, editingId } = modalState;
+  const ent = entity(key);
+  const form = ev.target;
+  const values = {};
+  let hasError = false;
+
+  const eventoObj = (db['evento']||[]).find(e => e.codevento == globalEventoId);
+
+  ent.fields.forEach(f=>{
+    const el = form.querySelector(`[data-field="${f.name}"]`);
+    if(!el) return;
+    const wrap = form.querySelector(`[data-field-wrap="${f.name}"]`);
+    const err = wrap.querySelector('.err-msg');
+    el.classList.remove('field-error'); err.classList.add('hidden');
+    let raw = el.value;
+
+    if(!ent.isGlobal && f.fixedToGlobal && !editingId && f.name === 'codevento' && globalEventoId){
+      raw = globalEventoId;
+    }
+
+    if(f.required && !raw){
+      el.classList.add('field-error');
+      err.textContent = 'Campo obrigatório.';
+      err.classList.remove('hidden');
+      hasError = true;
+      return;
+    }
+
+    if(f.type === 'date' && f.limitToEvent && eventoObj && raw){
+      if(raw < eventoObj.data_inicio || raw > eventoObj.data_final){
+        el.classList.add('field-error');
+        err.textContent = `A data deve estar entre ${formatDateBR(eventoObj.data_inicio)} e ${formatDateBR(eventoObj.data_final)}.`;
+        err.classList.remove('hidden');
+        hasError = true;
+        return;
+      }
+    }
+
+    if(f.type==='fk'){ values[f.name] = raw ? Number(raw) : null; }
+    else if(f.type==='number'){ values[f.name] = raw!=='' ? Number(raw) : null; }
+    else if(f.type==='date'){ values[f.name] = raw || null; }
+    else { 
+      values[f.name] = (f.name === 'email') ? (raw ? raw.trim().toLowerCase() : null) : (raw ? raw.trim().toUpperCase() : null); 
+    }
+  });
+
+  if(hasError){ showToast('Corrija os campos destacados.'); return; }
+
+  const saveBtn = document.getElementById('modal-save-btn');
+  saveBtn.disabled = true; saveBtn.textContent = 'Salvando…';
+
+  try{
+    if(editingId!==null){
+      const updated = await apiUpdate(key, editingId, values);
+      const idx = db[key].findIndex(r=>r[ent.pk]===editingId);
+      if(idx>-1) db[key][idx] = updated;
+      showToast(`${ent.label} atualizado!`);
+    } else {
+      const created = await apiCreate(key, values);
+      db[key].push(created);
+      if(key === 'evento'){
+        globalEventoId = created.codevento;
+        initGlobalEvento();
+      }
+      showToast(`${ent.label} cadastrado!`);
+    }
+    buildLayout();
+    closeModal('modal-form');
+  }catch(err){
+    showToast(err.message);
+  }finally{
+    saveBtn.disabled = false; saveBtn.textContent = 'Salvar';
+  }
+});
+
+async function deleteRecord(key, id){
+  const ent = entity(key);
+  if(!confirm(`Excluir o registro #${id} de ${ent.label}?`)) return;
+  try{
+    await apiDelete(key, id);
+    db[key] = db[key].filter(r=>r[ent.pk]!==id);
+    buildLayout();
+    showToast(`${ent.label} excluído.`);
+  }catch(err){
+    showToast(err.message);
+  }
+}
+
+function openModal(id){ document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+window.onclick = function(e){ if(e.target.id==='modal-form'){ closeModal('modal-form'); } };
+
+let toastTimer=null;
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  if(!toast) return;
+  document.getElementById('toast-msg').textContent = msg;
+  toast.classList.remove('translate-y-20','opacity-0');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ toast.classList.add('translate-y-20','opacity-0'); }, 3500);
+}
+
+loadDB();
+</script>
+</body>
+</html>
