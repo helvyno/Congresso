@@ -130,7 +130,11 @@ Object.keys(TABLES).forEach(tableName => {
       res.status(201).json(result.rows[0]);
     } catch (err) {
       console.error(`Erro no POST /api/${tableName}:`, err.message);
-      res.status(400).json({ error: err.message });
+      let errMsg = err.message;
+      if (err.code === '23505') {
+        errMsg = 'Já existe uma contagem cadastrada para este Setor, Período e Data neste Evento.';
+      }
+      res.status(400).json({ error: errMsg });
     }
   });
 
@@ -149,7 +153,11 @@ Object.keys(TABLES).forEach(tableName => {
       if (result.rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado.' });
       res.json(result.rows[0]);
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      let errMsg = err.message;
+      if (err.code === '23505') {
+        errMsg = 'Já existe uma contagem cadastrada para este Setor, Período e Data neste Evento.';
+      }
+      res.status(400).json({ error: errMsg });
     }
   });
 

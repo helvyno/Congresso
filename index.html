@@ -171,10 +171,10 @@ const ENTITIES = [
 ];
 
 let db = {};
-let current = isPublicView ? 'designacoes' : 'home';
+let current = 'home';
 let globalEventoId = null;
 let dashboardDataFilter = '';
-let dashboardPeriodoFilter = 'TODOS';
+let dashboardPeriodoFilter = null;
 let designacaoDataFilter = '';
 let modalState = { key:null, editingId:null };
 
@@ -249,7 +249,6 @@ async function checkDbStatus(){
 async function loadDB(){
   const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isCustom);
   
-  // O Promise.allSettled impede que uma falha isolada interrompa todo o carregamento do app
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -268,18 +267,14 @@ async function loadDB(){
     showToast('Atenção: Alguma tabela não pôde ser carregada. Veja o console (F12).');
   }
 
+  const periodos = db['periodo'] || [];
+  if (periodos.length > 0 && (dashboardPeriodoFilter === null || !periodos.some(p => p.codperiodo == dashboardPeriodoFilter))) {
+    dashboardPeriodoFilter = periodos[0].codperiodo;
+  }
+
   initGlobalEvento();
   buildLayout();
   checkDbStatus();
-
-  if(isPublicView){
-    const sidebar = document.getElementById('sidebar-nav');
-    if(sidebar) sidebar.style.display = 'none';
-  } else if(window.innerWidth < 768){
-    sidebarOpen = false;
-    const sidebar = document.getElementById('sidebar-nav');
-    if(sidebar) sidebar.classList.add('hidden');
-  }
 }
 
 function initGlobalEvento(){
@@ -339,7 +334,7 @@ function changeDashboardDate(val){
 }
 
 function changeDashboardPeriodo(val){
-  dashboardPeriodoFilter = val;
+  dashboardPeriodoFilter = val ? Number(val) : null;
   renderDashboard();
 }
 
@@ -352,7 +347,10 @@ function buildLayout(){
   const nav = document.getElementById('nav');
   if(!nav) return;
 
-  const visibleEntities = isPublicView ? ENTITIES.filter(e => e.key === 'designacoes') : ENTITIES;
+  let visibleEntities = ENTITIES;
+  if (isPublicView) {
+    visibleEntities = ENTITIES.filter(e => e.key === 'home' || e.key === 'designacoes' || e.key === 'contagem');
+  }
 
   nav.innerHTML = visibleEntities.map(e=>`
     <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
@@ -377,10 +375,10 @@ function buildLayout(){
             <h2 class="text-2xl font-bold text-white mb-1">${e.plural}</h2>
             <p class="text-[#94a3b8] text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
           </div>
-          ${e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+          ${(!isPublicView || e.key === 'contagem') ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
             Novo ${e.label}
-          </button>` : `<button onclick="openEntityModal('evento')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">Novo Evento</button>`}
+          </button>` : `<button onclick="openEntityModal('evento')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">Novo Evento</button>`) : ''}
         </div>
         <div class="mb-4 flex items-center gap-3 flex-wrap">
           <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
@@ -392,7 +390,7 @@ function buildLayout(){
             <table class="w-full text-sm">
               <thead>
                 <tr class="bg-[#0f172a]/50 text-left text-xs text-[#94a3b8] uppercase tracking-wider">
-                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...e.fields.map(f=>f.label), ''].map(h=>`<th class="px-6 py-3">${h}</th>`).join('')}
+                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...e.fields.map(f=>f.label), (!isPublicView || e.key === 'contagem' ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3">${h}</th>`).join('')}
                 </tr>
               </thead>
               <tbody id="tabela-${e.key}"></tbody>
@@ -409,8 +407,22 @@ function buildLayout(){
   updateCounts();
 }
 
-function showTab(key){
+async function showTab(key){
   current = key;
+  
+  // Atualiza os dados do banco em tempo real a cada clique no menu
+  try {
+    const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isCustom);
+    const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
+    activeEntities.forEach((e, idx) => {
+      if (results[idx].status === 'fulfilled') {
+        db[e.key] = results[idx].value;
+      }
+    });
+  } catch (err) {
+    console.error("Erro ao sincronizar dados com o banco:", err);
+  }
+
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   const targetTab = document.getElementById('tab-'+key);
   if(targetTab) targetTab.classList.add('active');
@@ -420,6 +432,7 @@ function showTab(key){
   if(targetNav) targetNav.classList.add('active');
   
   renderCurrentTab();
+  updateCounts();
 }
 
 function renderCurrentTab(){
@@ -444,11 +457,15 @@ function renderDashboard(){
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
   const periodos = db['periodo'] || [];
 
+  if (periodos.length > 0 && (dashboardPeriodoFilter === null || !periodos.some(p => p.codperiodo == dashboardPeriodoFilter))) {
+    dashboardPeriodoFilter = periodos[0].codperiodo;
+  }
+
   let contagensFiltradas = contagens.filter(ct => {
     return dashboardDataFilter && ct.data === dashboardDataFilter;
   });
 
-  if (dashboardPeriodoFilter && dashboardPeriodoFilter !== 'TODOS') {
+  if (dashboardPeriodoFilter) {
     contagensFiltradas = contagensFiltradas.filter(ct => String(ct.codperiodo) === String(dashboardPeriodoFilter));
   }
 
@@ -469,7 +486,7 @@ function renderDashboard(){
     ? setoresPendentes.map(s => `<span class="inline-block bg-[#ef4444]/10 text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5">${escapeHtml(s.descricao)}</span>`).join('')
     : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta seleção!</p>';
 
-  let periodoOptionsHtml = '<option value="TODOS">TODOS OS PERÍODOS</option>' + periodos.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
+  let periodoOptionsHtml = periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(dashboardPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
 
   tabHome.innerHTML = `
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -724,18 +741,28 @@ function renderTable(key){
       if(f.type==='date') val = formatDateBR(val);
       return `<td class="px-6 py-4 text-[#cbd5e1]">${val!==undefined && val!==null && val!=='' ? escapeHtml(String(val)) : '—'}</td>`;
     }).join('');
+    
+    let actionsCell = '';
+    const showEdit = !isPublicView || key === 'contagem';
+    const showDelete = !isPublicView;
+
+    if (showEdit || showDelete) {
+      actionsCell = `<td class="px-6 py-4 whitespace-nowrap">
+        ${showEdit ? `<button onclick="openEntityModal('${key}', ${r[ent.pk]})" class="text-[#3b82f6] hover:text-[#60a5fa] text-xs font-medium mr-3">Editar</button>` : ''}
+        ${showDelete ? `<button onclick="deleteRecord('${key}', ${r[ent.pk]})" class="text-[#ef4444] hover:text-[#f87171] text-xs font-medium">Excluir</button>` : ''}
+      </td>`;
+    }
+
     return `<tr class="hover:bg-[#334155]/30 transition-colors border-t border-[#334155]/60">
       <td class="px-6 py-4 font-mono text-[#3b82f6]">${r[ent.pk]}</td>
       ${cells}
-      <td class="px-6 py-4 whitespace-nowrap">
-        <button onclick="openEntityModal('${key}', ${r[ent.pk]})" class="text-[#3b82f6] hover:text-[#60a5fa] text-xs font-medium mr-3">Editar</button>
-        <button onclick="deleteRecord('${key}', ${r[ent.pk]})" class="text-[#ef4444] hover:text-[#f87171] text-xs font-medium">Excluir</button>
-      </td>
+      ${actionsCell}
     </tr>`;
   }).join('');
 }
 
 function openEntityModal(key, id){
+  if(isPublicView && key !== 'contagem') return;
   const ent = entity(key);
   modalState = { key, editingId: id!==undefined ? id : null };
   const record = id!==undefined ? findRecord(key,id) : null;
@@ -800,6 +827,7 @@ function openEntityModal(key, id){
 document.getElementById('entity-form').addEventListener('submit', async function(ev){
   ev.preventDefault();
   const { key, editingId } = modalState;
+  if(isPublicView && key !== 'contagem') return;
   const ent = entity(key);
   const form = ev.target;
   const values = {};
@@ -875,6 +903,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
 });
 
 async function deleteRecord(key, id){
+  if(isPublicView) return;
   const ent = entity(key);
   if(!confirm(`Excluir o registro #${id} de ${ent.label}?`)) return;
   try{
