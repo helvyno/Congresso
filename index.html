@@ -109,6 +109,7 @@ const ICONS = {
   setor: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>',
   congregacao: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"></path>',
   privilegio: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-2a9 9 0 11-18 0c0-1.657.507-3.195 1.374-4.468M12 3c2.5 0 4.847.99 6.573 2.75"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"></path>',
+  periodo: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>',
   pessoa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>',
   escalas: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
   designacoes: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
@@ -135,6 +136,9 @@ const ENTITIES = [
   { key:'privilegio', label:'Privilégio', plural:'Privilégios', pk:'codprivilegio', display:r=>r.descricao, isGlobal:true, fields:[ 
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Coordenador de setor'} 
   ]},
+  { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>r.descricao, isGlobal:true, fields:[
+    {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'}
+  ]},
   { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', display:r=>r.nomecompleto, fields:[
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
     {name:'telefone', label:'Telefone', type:'text', required:false, placeholder:'(34) 90000-0000'},
@@ -153,6 +157,7 @@ const ENTITIES = [
   { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', display:r=>String(r.quantidade), fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true},
     {name:'quantidade', label:'Quantidade', type:'number', required:true, placeholder:'0'}
@@ -169,6 +174,7 @@ let db = {};
 let current = isPublicView ? 'designacoes' : 'home';
 let globalEventoId = null;
 let dashboardDataFilter = '';
+let dashboardPeriodoFilter = 'TODOS';
 let designacaoDataFilter = '';
 let modalState = { key:null, editingId:null };
 
@@ -186,12 +192,21 @@ function refLabel(refKey,id){
   return rec ? ent.display(rec) : `#${id}`;
 }
 function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 async function apiList(table){
   const r = await fetch(`${API_BASE}/api/${table}`);
-  if(!r.ok) throw new Error('Falha ao carregar ' + table);
+  if(!r.ok) {
+    const errorData = await r.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Falha ao carregar ' + table);
+  }
   return r.json();
 }
 async function apiCreate(table, body){
@@ -232,19 +247,27 @@ async function checkDbStatus(){
 }
 
 async function loadDB(){
-  try{
-    const results = await Promise.all(ENTITIES.filter(e=>!e.isHome && !e.isCustom).map(e=>apiList(e.key)));
-    let idx = 0;
-    ENTITIES.forEach((e)=>{
-      if(!e.isHome && !e.isCustom){
-        db[e.key] = results[idx++];
-      }
-    });
-  }catch(err){
-    showToast('Não foi possível carregar os dados da API.');
-    ENTITIES.forEach(e=>{ if(!e.isHome && !e.isCustom) db[e.key] = []; });
-  }
+  const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isCustom);
   
+  // O Promise.allSettled impede que uma falha isolada interrompa todo o carregamento do app
+  const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
+  let hasError = false;
+
+  activeEntities.forEach((e, idx) => {
+    const res = results[idx];
+    if (res.status === 'fulfilled') {
+      db[e.key] = res.value;
+    } else {
+      console.error(`Erro ao carregar a tabela '${e.key}':`, res.reason);
+      db[e.key] = [];
+      hasError = true;
+    }
+  });
+
+  if (hasError) {
+    showToast('Atenção: Alguma tabela não pôde ser carregada. Veja o console (F12).');
+  }
+
   initGlobalEvento();
   buildLayout();
   checkDbStatus();
@@ -312,6 +335,11 @@ function changeGlobalEvento(val){
 
 function changeDashboardDate(val){
   dashboardDataFilter = val;
+  renderDashboard();
+}
+
+function changeDashboardPeriodo(val){
+  dashboardPeriodoFilter = val;
   renderDashboard();
 }
 
@@ -414,10 +442,15 @@ function renderDashboard(){
   const pessoas = (db['pessoa']||[]).filter(p => !evId || p.codevento == evId);
   const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
+  const periodos = db['periodo'] || [];
 
-  const contagensFiltradas = contagens.filter(ct => {
+  let contagensFiltradas = contagens.filter(ct => {
     return dashboardDataFilter && ct.data === dashboardDataFilter;
   });
+
+  if (dashboardPeriodoFilter && dashboardPeriodoFilter !== 'TODOS') {
+    contagensFiltradas = contagensFiltradas.filter(ct => String(ct.codperiodo) === String(dashboardPeriodoFilter));
+  }
 
   const totalQuantidade = contagensFiltradas.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
 
@@ -434,19 +467,29 @@ function renderDashboard(){
 
   let setoresPendentesHtml = setoresPendentes.length > 0 
     ? setoresPendentes.map(s => `<span class="inline-block bg-[#ef4444]/10 text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5">${escapeHtml(s.descricao)}</span>`).join('')
-    : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta data!</p>';
+    : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta seleção!</p>';
+
+  let periodoOptionsHtml = '<option value="TODOS">TODOS OS PERÍODOS</option>' + periodos.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
 
   tabHome.innerHTML = `
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div>
         <h2 class="text-2xl font-bold text-white mb-1">Dashboard do Evento</h2>
-        <p class="text-[#94a3b8] text-sm">Resumo estatístico e contagens por data do evento</p>
+        <p class="text-[#94a3b8] text-sm">Resumo estatístico e contagens por data e período cadastrado</p>
       </div>
-      <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
-        <span class="text-xs text-[#94a3b8] font-medium">Data do Evento:</span>
-        <select id="dashboard-date-filter" onchange="changeDashboardDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
-          <option value="">Carregando datas...</option>
-        </select>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
+          <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
+          <select id="dashboard-date-filter" onchange="changeDashboardDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+            <option value="">Carregando datas...</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
+          <span class="text-xs text-[#94a3b8] font-medium">Período:</span>
+          <select id="dashboard-periodo-filter" onchange="changeDashboardPeriodo(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+            ${periodoOptionsHtml}
+          </select>
+        </div>
       </div>
     </div>
 
@@ -472,8 +515,8 @@ function renderDashboard(){
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6">
         <h3 class="text-base font-bold text-white mb-4 flex items-center justify-between">
-          <span>Contagem por Setor (Data Selecionada)</span>
-          <span class="text-xs font-normal text-[#3b82f6] bg-[#3b82f6]/10 px-2 py-1 rounded">Total Geral: ${totalQuantidade}</span>
+          <span>Contagem por Setor (Filtro Atual)</span>
+          <span class="text-xs font-normal text-[#3b82f6] bg-[#3b82f6]/10 px-2 py-1 rounded">Total: ${totalQuantidade}</span>
         </h3>
         <div class="max-h-64 overflow-y-auto pr-1">
           ${contagensPorSetorHtml}
@@ -482,7 +525,7 @@ function renderDashboard(){
       <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 flex flex-col justify-between">
         <div>
           <h3 class="text-base font-bold text-white mb-2">Setores Pendentes de Contagem</h3>
-          <p class="text-sm text-[#94a3b8] mb-4">Setores que ainda não informaram a contagem na data selecionada:</p>
+          <p class="text-sm text-[#94a3b8] mb-4">Setores que ainda não informaram a contagem no filtro selecionado:</p>
         </div>
         <div class="bg-[#0f172a] p-4 rounded-lg border border-[#334155] min-h-[100px]">
           ${setoresPendentesHtml}
@@ -493,6 +536,8 @@ function renderDashboard(){
   updateDashboardDateOptions();
   const dateEl = document.getElementById('dashboard-date-filter');
   if(dateEl) dateEl.value = dashboardDataFilter;
+  const periodoEl = document.getElementById('dashboard-periodo-filter');
+  if(periodoEl) periodoEl.value = dashboardPeriodoFilter;
 }
 
 function renderDesignacoes(){
@@ -570,13 +615,9 @@ function renderDesignacoes(){
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div>
         <h2 class="text-2xl font-bold text-white mb-1">Designações de Indicadores</h2>
-        <p class="text-[#94a3b8] text-sm">Selecione a Data para exibir os indicadores escalados</p>
+        <p class="text-[#94a3b8] text-sm">Escalas e contato direto via WhatsApp</p>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
-        ${!isPublicView ? `<button onclick="copyPublicLink()" class="bg-[#10b981] hover:bg-[#059669] text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
-          Copiar Link Público
-        </button>` : ''}
         <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
           <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
           <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
@@ -621,15 +662,6 @@ function onSearchDesignacaoPessoa(val){
   renderDesignacoes();
 }
 
-function copyPublicLink(){
-  const url = window.location.origin + window.location.pathname + '?view=public';
-  navigator.clipboard.writeText(url).then(() => {
-    showToast('Link público copiado com sucesso!');
-  }).catch(() => {
-    showToast('Erro ao copiar o link.');
-  });
-}
-
 function updateCounts(){
   const evId = globalEventoId;
   ENTITIES.filter(e=>!e.isHome && !e.isCustom).forEach(e=>{
@@ -644,11 +676,6 @@ function updateCounts(){
 function onSearch(key, value){
   entity(key)._search = value.toLowerCase();
   renderTable(key);
-}
-
-function onSearchPessoaEscala(value){
-  entity('escalas')._searchPessoa = value.toLowerCase();
-  renderTable('escalas');
 }
 
 function renderTable(key){
@@ -669,14 +696,6 @@ function renderTable(key){
         if(f.type==='date') v = formatDateBR(v);
         return String(v||'').toLowerCase().includes(q);
       }) || String(r[ent.pk]).includes(q);
-    });
-  }
-
-  if(key === 'escalas' && ent._searchPessoa){
-    const qPessoa = ent._searchPessoa;
-    rows = rows.filter(r => {
-      const p = findRecord('pessoa', r.codpessoa);
-      return p && p.nomecompleto.toLowerCase().includes(qPessoa);
     });
   }
 

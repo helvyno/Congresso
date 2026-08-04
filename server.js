@@ -22,14 +22,31 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-pool.connect()
-  .then(client => {
+async function initDatabase() {
+  try {
+    const client = await pool.connect();
     console.log('✅ Conectado ao Neon PostgreSQL');
+    
+    // Garante que a tabela periodo existe e possui os registros padrão caso esteja vazia
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS periodo (
+          codperiodo SERIAL PRIMARY KEY,
+          descricao VARCHAR(50) NOT NULL
+      );
+    `);
+    const resPeriodo = await client.query('SELECT COUNT(*) FROM periodo');
+    if (parseInt(resPeriodo.rows[0].count) === 0) {
+      await client.query("INSERT INTO periodo (descricao) VALUES ('MANHÃ'), ('TARDE');");
+      console.log('✨ Períodos padrão (MANHÃ, TARDE) inseridos com sucesso!');
+    }
+    
     client.release();
-  })
-  .catch(err => {
-    console.error('❌ Erro ao conectar ao Neon:', err.message);
-  });
+  } catch (err) {
+    console.error('❌ Erro ao inicializar o banco:', err.message);
+  }
+}
+
+initDatabase();
 
 const app = express();
 
@@ -42,9 +59,10 @@ const TABLES = {
   setor: { pk: 'codsetor', columns: ['descricao', 'codevento'] },
   congregacao: { pk: 'codcong', columns: ['nome_congregacao', 'codevento'] },
   privilegio: { pk: 'codprivilegio', columns: ['descricao'] },
+  periodo: { pk: 'codperiodo', columns: ['descricao'] },
   pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codevento', 'codcong'] },
   escalas: { pk: 'codescala', columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
-  contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade', 'data'] },
+  contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade', 'data', 'codperiodo'] },
   usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] }
 };
 
@@ -84,7 +102,8 @@ Object.keys(TABLES).forEach(tableName => {
       const result = await pool.query(`SELECT * FROM ${tableName} ORDER BY ${cfg.pk} ASC`);
       res.json(result.rows);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error(`Erro GET /api/${tableName}:`, err.message);
+      res.status(500).json({ error: `Erro na tabela ${tableName}: ${err.message}` });
     }
   });
 
