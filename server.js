@@ -60,6 +60,19 @@ async function initDatabase() {
           imagem_base64 TEXT
       );
     `);
+
+    // Atualização da tabela setor para garantir a coluna numass (caso não exista)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS setor (
+          codsetor SERIAL PRIMARY KEY,
+          descricao VARCHAR(100) NOT NULL,
+          codevento INTEGER,
+          numass INTEGER
+      );
+    `);
+    await client.query(`
+      ALTER TABLE setor ADD COLUMN IF NOT EXISTS numass INTEGER;
+    `);
     
     client.release();
   } catch (err) {
@@ -109,7 +122,7 @@ app.post('/api/configmapa/salvar', async (req, res) => {
 
 const TABLES = {
   evento: { pk: 'codevento', columns: ['descricao', 'data_inicio', 'data_final'] },
-  setor: { pk: 'codsetor', columns: ['descricao', 'codevento'] },
+  setor: { pk: 'codsetor', columns: ['descricao', 'codevento', 'numass'] },
   congregacao: { pk: 'codcong', columns: ['nome_congregacao', 'codevento'] },
   privilegio: { pk: 'codprivilegio', columns: ['descricao'] },
   periodo: { pk: 'codperiodo', columns: ['descricao'] },

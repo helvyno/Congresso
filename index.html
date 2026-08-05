@@ -131,7 +131,8 @@ const ENTITIES = [
   ]},
   { key:'setor', label:'Setor', plural:'Setores', pk:'codsetor', display:r=>r.descricao, fields:[
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Portaria Principal'},
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true}
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'numass', label:'NÚMERO DE ASSENTOS', type:'number', required:false, placeholder:'Ex.: 150'}
   ]},
   { key:'congregacao', label:'Congregação', plural:'Congregações', pk:'codcong', display:r=>r.nome_congregacao, fields:[ 
     {name:'nome_congregacao', label:'Nome da congregação', type:'text', required:true, placeholder:'Ex.: CENTRAL'},
