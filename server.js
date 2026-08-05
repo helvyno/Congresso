@@ -27,7 +27,7 @@ async function initDatabase() {
     const client = await pool.connect();
     console.log('✅ Conectado ao Neon PostgreSQL');
     
-    // Garante que a tabela periodo existe e possui os registros padrão caso esteja vazia
+    // Tabela periodo
     await client.query(`
       CREATE TABLE IF NOT EXISTS periodo (
           codperiodo SERIAL PRIMARY KEY,
@@ -39,6 +39,27 @@ async function initDatabase() {
       await client.query("INSERT INTO periodo (descricao) VALUES ('MANHÃ'), ('TARDE');");
       console.log('✨ Períodos padrão (MANHÃ, TARDE) inseridos com sucesso!');
     }
+
+    // Tabela PARAMETROS solicitada
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS parametros (
+          codparametro SERIAL PRIMARY KEY,
+          datacont DATE NOT NULL,
+          codperiodo INTEGER NOT NULL,
+          horaini TIME NOT NULL,
+          horafim TIME NOT NULL,
+          codevento INTEGER
+      );
+    `);
+
+    // Tabela configmapa
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS configmapa (
+          codmapa SERIAL PRIMARY KEY,
+          codevento INTEGER,
+          imagem_base64 TEXT
+      );
+    `);
     
     client.release();
   } catch (err) {
@@ -51,8 +72,40 @@ initDatabase();
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Rota dedicada para salvar ou atualizar o mapa do evento sem erros
+app.post('/api/configmapa/salvar', async (req, res) => {
+  try {
+    const { codevento, imagem_base64 } = req.body;
+    if (!codevento) {
+      return res.status(400).json({ error: 'Evento não especificado para o mapa.' });
+    }
+
+    // Verifica se já existe mapa para este evento
+    const existe = await pool.query('SELECT codmapa FROM configmapa WHERE codevento = $1', [codevento]);
+    
+    let result;
+    if (existe.rows.length > 0) {
+      // Atualiza
+      result = await pool.query(
+        'UPDATE configmapa SET imagem_base64 = $1 WHERE codevento = $2 RETURNING *',
+        [imagem_base64, codevento]
+      );
+    } else {
+      // Insere
+      result = await pool.query(
+        'INSERT INTO configmapa (codevento, imagem_base64) VALUES ($1, $2) RETURNING *',
+        [codevento, imagem_base64]
+      );
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erro ao salvar mapa:', err.message);
+    res.status(500).json({ error: 'Erro ao salvar mapa: ' + err.message });
+  }
+});
 
 const TABLES = {
   evento: { pk: 'codevento', columns: ['descricao', 'data_inicio', 'data_final'] },
@@ -63,17 +116,19 @@ const TABLES = {
   pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codevento', 'codcong'] },
   escalas: { pk: 'codescala', columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
   contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade', 'data', 'codperiodo'] },
-  usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] }
+  usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] },
+  parametros: { pk: 'codparametro', columns: ['datacont', 'codperiodo', 'horaini', 'horafim', 'codevento'] },
+  configmapa: { pk: 'codmapa', columns: ['codevento', 'imagem_base64'] }
 };
 
 function sanitizeBody(body) {
   const sanitized = {};
   for (const key of Object.keys(body)) {
     const val = body[key];
-    if (typeof val === 'string') {
+    if (typeof val === 'string' && key !== 'imagem_base64') {
       if (key === 'email') {
         sanitized[key] = val.trim().toLowerCase();
-      } else if (key === 'data' || key === 'data_inicio' || key === 'data_final') {
+      } else if (key === 'data' || key === 'data_inicio' || key === 'data_final' || key === 'datacont' || key === 'horaini' || key === 'horafim') {
         sanitized[key] = val;
       } else {
         sanitized[key] = val.trim().toUpperCase();
@@ -121,6 +176,27 @@ Object.keys(TABLES).forEach(tableName => {
   app.post(`/api/${tableName}`, async (req, res) => {
     try {
       const cleanBody = sanitizeBody(req.body);
+
+      // Validação específica para CONTAGEM baseada na tabela PARAMETROS
+      if (tableName === 'contagem') {
+        const { data, codperiodo, codevento } = cleanBody;
+        const horaAtual = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
+
+        const paramQuery = await pool.query(
+          `SELECT * FROM parametros WHERE datacont = $1 AND codperiodo = $2 AND (codevento = $3 OR codevento IS NULL)`,
+          [data, codperiodo, codevento]
+        );
+
+        if (paramQuery.rows.length > 0) {
+          const param = paramQuery.rows[0];
+          if (horaAtual < param.horaini || horaAtual > param.horafim) {
+            return res.status(400).json({ 
+              error: `Atenção: A inclusão de registros para esta data e período só é permitida entre ${param.horaini} e ${param.horafim}. Horário atual fora do parâmetro permitido.` 
+            });
+          }
+        }
+      }
+
       const cols = cfg.columns;
       const values = cols.map(c => cleanBody[c] !== undefined ? cleanBody[c] : null);
       const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
@@ -132,7 +208,7 @@ Object.keys(TABLES).forEach(tableName => {
       console.error(`Erro no POST /api/${tableName}:`, err.message);
       let errMsg = err.message;
       if (err.code === '23505') {
-        errMsg = 'Já existe uma contagem cadastrada para este Setor, Período e Data neste Evento.';
+        errMsg = 'Já existe um registro duplicado com esses dados.';
       }
       res.status(400).json({ error: errMsg });
     }
@@ -155,7 +231,7 @@ Object.keys(TABLES).forEach(tableName => {
     } catch (err) {
       let errMsg = err.message;
       if (err.code === '23505') {
-        errMsg = 'Já existe uma contagem cadastrada para este Setor, Período e Data neste Evento.';
+        errMsg = 'Já existe um registro duplicado com esses dados.';
       }
       res.status(400).json({ error: errMsg });
     }
