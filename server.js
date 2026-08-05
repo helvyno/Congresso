@@ -40,17 +40,19 @@ async function initDatabase() {
       console.log('✨ Períodos padrão (MANHÃ, TARDE) inseridos com sucesso!');
     }
 
-    // Tabela PARAMETROS atualizada com o campo 'ativo' e sem horários
+    // Tabela PARAMETROS atualizada com o campo 'ativo' e 'horacont'
     await client.query(`
       CREATE TABLE IF NOT EXISTS parametros (
           codparametro SERIAL PRIMARY KEY,
           datacont DATE NOT NULL,
           codperiodo INTEGER NOT NULL,
           codevento INTEGER,
-          ativo BOOLEAN DEFAULT TRUE
+          ativo BOOLEAN DEFAULT TRUE,
+          horacont TIME
       );
     `);
     await client.query(`ALTER TABLE parametros ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;`);
+    await client.query(`ALTER TABLE parametros ADD COLUMN IF NOT EXISTS horacont TIME;`);
     await client.query(`ALTER TABLE parametros DROP COLUMN IF EXISTS horaini;`);
     await client.query(`ALTER TABLE parametros DROP COLUMN IF EXISTS horafim;`);
 
@@ -129,7 +131,7 @@ const TABLES = {
   escalas: { pk: 'codescala', columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
   contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade', 'data', 'codperiodo'] },
   usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] },
-  parametros: { pk: 'codparametro', columns: ['datacont', 'codperiodo', 'codevento', 'ativo'] },
+  parametros: { pk: 'codparametro', columns: ['datacont', 'codperiodo', 'codevento', 'ativo', 'horacont'] },
   configmapa: { pk: 'codmapa', columns: ['codevento', 'imagem_base64'] }
 };
 
@@ -189,7 +191,6 @@ Object.keys(TABLES).forEach(tableName => {
     try {
       const cleanBody = sanitizeBody(req.body);
 
-      // Validação de CONTAGEM baseada na tabela PARAMETROS (verificando se o parâmetro está ativo para a data/período)
       if (tableName === 'contagem') {
         const { data, codperiodo, codevento } = cleanBody;
 
@@ -227,7 +228,6 @@ Object.keys(TABLES).forEach(tableName => {
       const { id } = req.params;
       const cleanBody = sanitizeBody(req.body);
 
-      // Validação de CONTAGEM no UPDATE também
       if (tableName === 'contagem') {
         const { data, codperiodo, codevento } = cleanBody;
         const paramQuery = await pool.query(

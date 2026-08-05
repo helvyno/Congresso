@@ -6,6 +6,8 @@
 <title>DATASABE - Sistema de Designação de Indicadores</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   body { font-family: 'Inter', sans-serif; overflow: hidden; }
@@ -19,6 +21,7 @@
   ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: #475569; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
   .field-error { border-color: #ef4444 !important; }
   .nav-count { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.08); padding: 1px 7px; border-radius: 9999px; margin-left: auto; }
   .nav-btn.active .nav-count { background: rgba(255,255,255,.22); }
@@ -90,7 +93,9 @@ const API_BASE = 'https://congresso-5p1a.onrender.com';
 const urlParams = new URLSearchParams(window.location.search);
 const isPublicView = urlParams.get('view') === 'public';
 let sidebarOpen = false;
-let chartInstance = null;
+let chartInstance1 = null;
+let chartInstanceRep1 = null;
+let chartInstanceRep2 = null;
 
 function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
@@ -105,6 +110,7 @@ function toggleSidebar() {
 
 const ICONS = {
   home: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>',
+  relatorios: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>',
   evento: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
   setor: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>',
   congregacao: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"></path>',
@@ -121,6 +127,7 @@ const ICONS = {
 
 const ENTITIES = [
   { key:'home', label:'Início', plural:'Dashboard', isHome:true },
+  { key:'relatorios', label:'Relatório', plural:'Relatórios', isReport:true },
   { key:'designacoes', label:'Designação', plural:'Designações', isCustom:true },
   { key:'mapa', label:'Mapa', plural:'Mapa do Evento', isCustomMap:true },
   { key:'evento', label:'Evento', plural:'Eventos', pk:'codevento', display:r=>r.descricao, fields:[
@@ -143,9 +150,10 @@ const ENTITIES = [
   { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>r.descricao, isGlobal:true, fields:[
     {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'}
   ]},
-  { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
+  { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
     {name:'datacont', label:'Data da Contagem', type:'date', required:true, limitToEvent:true},
+    {name:'horacont', label:'Hora da Contagem', type:'time', required:false},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
     {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
   ]},
@@ -185,6 +193,8 @@ let current = 'home';
 let globalEventoId = null;
 let dashboardDataFilter = 'ALL';
 let dashboardPeriodoFilter = 'ALL';
+let relatorioDataFilter = 'ALL';
+let relatorioPeriodoFilter = 'ALL';
 let designacaoDataFilter = '';
 let modalState = { key:null, editingId:null };
 
@@ -257,7 +267,7 @@ async function checkDbStatus(){
 }
 
 async function loadDB(){
-  const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isCustom && !e.isCustomMap);
+  const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap);
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -300,11 +310,17 @@ function initGlobalEvento(){
 function updateDashboardDateOptions(){
   const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
   const selectDate = document.getElementById('dashboard-date-filter');
-  if(!selectDate) return;
+  const selectRepDate = document.getElementById('relatorio-date-filter');
 
   if(!ev || !ev.data_inicio || !ev.data_final){
-    selectDate.innerHTML = '<option value="ALL">Todas as Datas</option>';
-    dashboardDataFilter = 'ALL';
+    if(selectDate){
+      selectDate.innerHTML = '<option value="ALL">Todas as Datas</option>';
+      dashboardDataFilter = 'ALL';
+    }
+    if(selectRepDate){
+      selectRepDate.innerHTML = '<option value="ALL">Todas as Datas</option>';
+      relatorioDataFilter = 'ALL';
+    }
     return;
   }
 
@@ -317,8 +333,16 @@ function updateDashboardDateOptions(){
   }
 
   let html = '<option value="ALL">Todas as Datas</option>';
-  html += dates.map(d => `<option value="${d}" ${d===dashboardDataFilter?'selected':''}>${formatDateBR(d)}</option>`).join('');
-  selectDate.innerHTML = html;
+  html += dates.map(d => `<option value="${d}">${formatDateBR(d)}</option>`).join('');
+  
+  if(selectDate){
+    selectDate.innerHTML = html;
+    selectDate.value = dashboardDataFilter;
+  }
+  if(selectRepDate){
+    selectRepDate.innerHTML = html;
+    selectRepDate.value = relatorioDataFilter;
+  }
 }
 
 function changeGlobalEvento(val){
@@ -339,6 +363,16 @@ function changeDashboardPeriodo(val){
   renderDashboard();
 }
 
+function changeRelatorioDate(val){
+  relatorioDataFilter = val;
+  renderRelatorios();
+}
+
+function changeRelatorioPeriodo(val){
+  relatorioPeriodoFilter = val;
+  renderRelatorios();
+}
+
 function changeDesignacaoDate(val){
   designacaoDataFilter = val;
   renderDesignacoes();
@@ -350,14 +384,14 @@ function buildLayout(){
 
   let visibleEntities = ENTITIES;
   if (isPublicView) {
-    visibleEntities = ENTITIES.filter(e => e.key === 'home' || e.key === 'designacoes' || e.key === 'mapa' || e.key === 'contagem');
+    visibleEntities = ENTITIES.filter(e => e.key === 'home' || e.key === 'relatorios' || e.key === 'designacoes' || e.key === 'mapa' || e.key === 'contagem');
   }
 
   nav.innerHTML = visibleEntities.map(e=>`
     <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[e.key] || ICONS.evento}</svg>
       <span class="truncate">${e.plural}</span>
-      ${!e.isHome && !e.isCustom && !e.isCustomMap ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
+      ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
     </button>
   `).join('');
 
@@ -365,6 +399,9 @@ function buildLayout(){
   root.innerHTML = ENTITIES.map(e=>{
     if(e.isHome){
       return `<div id="tab-home" class="tab-content overflow-y-auto ${current==='home'?'active':''}"></div>`;
+    }
+    if(e.isReport){
+      return `<div id="tab-relatorios" class="tab-content overflow-y-auto ${current==='relatorios'?'active':''}"></div>`;
     }
     if(e.isCustom){
       return `<div id="tab-designacoes" class="tab-content overflow-y-auto ${current==='designacoes'?'active':''}"></div>`;
@@ -407,7 +444,7 @@ function buildLayout(){
     `;
   }).join('');
 
-  ENTITIES.filter(e=>!e.isHome && !e.isCustom && !e.isCustomMap).forEach(e=>{ e._search=''; });
+  ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap).forEach(e=>{ e._search=''; });
   renderCurrentTab();
   updateCounts();
 }
@@ -419,7 +456,7 @@ async function showTab(key){
   if(sidebar) sidebar.classList.add('hidden');
 
   try {
-    const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isCustom && !e.isCustomMap);
+    const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap);
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -445,6 +482,8 @@ async function showTab(key){
 function renderCurrentTab(){
   if(current === 'home'){
     renderDashboard();
+  } else if(current === 'relatorios'){
+    renderRelatorios();
   } else if(current === 'designacoes'){
     renderDesignacoes();
   } else if(current === 'mapa'){
@@ -515,9 +554,11 @@ function renderDashboard(){
       </div>
     </div>
 
+    <!-- Gráfico 1: Volume Total de Contagem por Data / Período -->
     <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
-      <div class="relative w-full h-[320px]">
-        <canvas id="chart3dCanvas"></canvas>
+      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
+      <div class="relative w-full h-[300px]">
+        <canvas id="chartCanvas1"></canvas>
       </div>
     </div>
 
@@ -567,20 +608,19 @@ function renderDashboard(){
   const periodoEl = document.getElementById('dashboard-periodo-filter');
   if(periodoEl) periodoEl.value = dashboardPeriodoFilter;
 
-  renderChartJs(contagens, periodos);
+  renderDashboardChart(contagens, periodos);
 }
 
-function renderChartJs(contagens, periodos){
-  const ctx = document.getElementById('chart3dCanvas');
-  if(!ctx) return;
+function renderDashboardChart(contagens, periodos){
+  const ctx1 = document.getElementById('chartCanvas1');
+  if(!ctx1) return;
 
   const diasUnicos = dashboardDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data))].sort() : [dashboardDataFilter];
   
-  const labels = [];
-  const dataValues = [];
-  const backgroundColors = [];
-
-  const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+  const labels1 = [];
+  const dataValues1 = [];
+  const backgroundColors1 = [];
+  const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
 
   diasUnicos.forEach((dia, idx) => {
     periodos.forEach((per, pIdx) => {
@@ -589,26 +629,24 @@ function renderChartJs(contagens, periodos){
       const subCont = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
       const totalPer = subCont.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
       
-      labels.push(`${formatDateBR(dia)} (${per.descricao})`);
-      dataValues.push(totalPer);
+      labels1.push(`${formatDateBR(dia)} (${per.descricao})`);
+      dataValues1.push(totalPer);
 
       const baseColor = palette[idx % palette.length];
-      backgroundColors.push(pIdx === 0 ? baseColor : `${baseColor}99`);
+      backgroundColors1.push(pIdx === 0 ? baseColor : `${baseColor}99`);
     });
   });
 
-  if(chartInstance) {
-    chartInstance.destroy();
-  }
+  if(chartInstance1) chartInstance1.destroy();
 
-  chartInstance = new Chart(ctx, {
+  chartInstance1 = new Chart(ctx1, {
     type: 'bar',
     data: {
-      labels: labels.length > 0 ? labels : ['Nenhum dado'],
+      labels: labels1.length > 0 ? labels1 : ['Nenhum dado'],
       datasets: [{
         label: 'Quantidade de Contagem',
-        data: dataValues.length > 0 ? dataValues : [0],
-        backgroundColor: backgroundColors.length > 0 ? backgroundColors : ['#3b82f6'],
+        data: dataValues1.length > 0 ? dataValues1 : [0],
+        backgroundColor: backgroundColors1.length > 0 ? backgroundColors1 : ['#3b82f6'],
         borderWidth: 1,
         borderColor: '#334155',
         borderRadius: 6,
@@ -643,6 +681,394 @@ function renderChartJs(contagens, periodos){
       }
     }
   });
+}
+
+function renderRelatorios(){
+  const tabRep = document.getElementById('tab-relatorios');
+  if(!tabRep) return;
+
+  const evId = globalEventoId;
+  const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
+  const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
+  const periodos = db['periodo'] || [];
+
+  let periodoOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(relatorioPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
+
+  tabRep.innerHTML = `
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-white mb-1">Relatórios e Gráficos</h2>
+      <p class="text-[#94a3b8] text-sm">Geração dos cartões oficiais do congresso e gráficos analíticos</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <!-- Card Relatório 1 -->
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <div class="w-12 h-12 rounded-lg bg-[#3b82f6]/10 text-[#3b82f6] flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">CO-24-T - Setores</h3>
+          <p class="text-sm text-[#94a3b8] mb-6">Cartão de contagem da assistência do congresso contendo a relação completa de setores, número de assentos e os respectivos indicadores.</p>
+        </div>
+        <button onclick="gerarPdfSetores()" class="w-full bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          CO-24-T - Setores (PDF)
+        </button>
+      </div>
+
+      <!-- Card Relatório 2 -->
+      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <div class="w-12 h-12 rounded-lg bg-[#10b981]/10 text-[#10b981] flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">CO-24-T - Assistência</h3>
+          <p class="text-sm text-[#94a3b8] mb-6">Relatório de controle contendo as horas de contagem (Parâmetros) e a soma geral da assistência por dia.</p>
+        </div>
+        <button onclick="gerarPdfistencia()" class="w-full bg-[#10b981] hover:bg-[#059669] text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          CO-24-T - Assistência (PDF)
+        </button>
+      </div>
+    </div>
+
+    <!-- Filtros para os Gráficos -->
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-4 bg-[#1e293b] p-4 rounded-xl border border-[#334155]">
+      <div>
+        <h3 class="text-base font-bold text-white">Análise Gráfica</h3>
+        <p class="text-xs text-[#94a3b8]">Estatísticas de volume de assistência</p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2 bg-[#0f172a] px-3 py-2 rounded-lg border border-[#334155]">
+          <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
+          <select id="relatorio-date-filter" onchange="changeRelatorioDate(this.value)" class="bg-transparent text-sm font-semibold text-[#3b82f6] focus:outline-none cursor-pointer">
+            <option value="ALL">Todas as Datas</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2 bg-[#0f172a] px-3 py-2 rounded-lg border border-[#334155]">
+          <span class="text-xs text-[#94a3b8] font-medium">Período:</span>
+          <select id="relatorio-periodo-filter" onchange="changeRelatorioPeriodo(this.value)" class="bg-transparent text-sm font-semibold text-[#3b82f6] focus:outline-none cursor-pointer">
+            ${periodoOptionsHtml}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráfico 1 de Relatórios: Volume Total por Data / Período -->
+    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
+      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
+      <div class="relative w-full h-[300px]">
+        <canvas id="chartCanvasRep1"></canvas>
+      </div>
+    </div>
+
+    <!-- Gráfico 2 de Relatórios: Quantidade de Contagem por Setor -->
+    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl pb-12">
+      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Quantidade da Contagem por Setor (por Data / Período)</h3>
+      <div class="relative w-full h-[380px]">
+        <canvas id="chartCanvasRep2"></canvas>
+      </div>
+    </div>
+  `;
+
+  updateDashboardDateOptions();
+  const dateEl = document.getElementById('relatorio-date-filter');
+  if(dateEl) dateEl.value = relatorioDataFilter;
+  const periodoEl = document.getElementById('relatorio-periodo-filter');
+  if(periodoEl) periodoEl.value = relatorioPeriodoFilter;
+
+  renderRelatorioCharts(contagens, periodos, setores);
+}
+
+function renderRelatorioCharts(contagens, periodos, setores){
+  const ctx1 = document.getElementById('chartCanvasRep1');
+  const ctx2 = document.getElementById('chartCanvasRep2');
+  if(!ctx1 || !ctx2) return;
+
+  const diasUnicos = relatorioDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data))].sort() : [relatorioDataFilter];
+  
+  const labels1 = [];
+  const dataValues1 = [];
+  const backgroundColors1 = [];
+  const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
+
+  diasUnicos.forEach((dia, idx) => {
+    periodos.forEach((per, pIdx) => {
+      if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
+      
+      const subCont = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+      const totalPer = subCont.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+      
+      labels1.push(`${formatDateBR(dia)} (${per.descricao})`);
+      dataValues1.push(totalPer);
+
+      const baseColor = palette[idx % palette.length];
+      backgroundColors1.push(pIdx === 0 ? baseColor : `${baseColor}99`);
+    });
+  });
+
+  const labels2 = [];
+  diasUnicos.forEach(dia => {
+    periodos.forEach(per => {
+      if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
+      const temReg = contagens.some(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+      if (relatorioDataFilter !== 'ALL' || temReg) {
+        labels2.push(`${formatDateBR(dia)} (${per.descricao})`);
+      }
+    });
+  });
+
+  const datasets2 = setores.map((setor, idx) => {
+    const dataPoints = [];
+    diasUnicos.forEach(dia => {
+      periodos.forEach(per => {
+        if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
+        const temReg = contagens.some(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+        if (relatorioDataFilter !== 'ALL' || temReg) {
+          const sub = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo) && c.codsetor == setor.codsetor);
+          const totalSetor = sub.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+          dataPoints.push(totalSetor);
+        }
+      });
+    });
+
+    const color = palette[idx % palette.length];
+    return {
+      label: setor.descricao,
+      data: dataPoints,
+      backgroundColor: color,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: '#334155'
+    };
+  });
+
+  if(chartInstanceRep1) chartInstanceRep1.destroy();
+  if(chartInstanceRep2) chartInstanceRep2.destroy();
+
+  chartInstanceRep1 = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: labels1.length > 0 ? labels1 : ['Nenhum dado'],
+      datasets: [{
+        label: 'Quantidade de Contagem',
+        data: dataValues1.length > 0 ? dataValues1 : [0],
+        backgroundColor: backgroundColors1.length > 0 ? backgroundColors1 : ['#3b82f6'],
+        borderWidth: 1,
+        borderColor: '#334155',
+        borderRadius: 6,
+        barPercentage: 0.7,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#ffffff',
+          bodyColor: '#cbd5e1',
+          borderColor: '#334155',
+          borderWidth: 1,
+          padding: 10,
+          displayColors: false
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(51, 65, 85, 0.4)' },
+          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+        }
+      }
+    }
+  });
+
+  chartInstanceRep2 = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: labels2.length > 0 ? labels2 : ['Nenhum dado'],
+      datasets: datasets2.length > 0 ? datasets2 : [{ label: 'Nenhum setor', data: [0], backgroundColor: '#10b981' }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { 
+          display: true, 
+          position: 'bottom',
+          labels: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#ffffff',
+          bodyColor: '#cbd5e1',
+          borderColor: '#334155',
+          borderWidth: 1,
+          padding: 10
+        }
+      },
+      scales: {
+        x: {
+          stacked: false,
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+        },
+        y: {
+          stacked: false,
+          beginAtZero: true,
+          grid: { color: 'rgba(51, 65, 85, 0.4)' },
+          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, precision: 0 }
+        }
+      }
+    }
+  });
+}
+
+function gerarPdfSetores(){
+  const evId = globalEventoId;
+  const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
+  const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
+
+  // Mapeia TODOS os setores cadastrados sem limitar a 15
+  const cleanRows = setores.map((setor, i) => {
+    const setorNome = setor ? setor.descricao : '';
+    const numAss = setor && setor.numass ? String(setor.numass) : '';
+    let indicadorNome = '';
+    if(setor){
+      const esc = escalas.find(e => e.codsetor == setor.codsetor);
+      if(esc){
+        const pes = findRecord('pessoa', esc.codpessoa);
+        if(pes) indicadorNome = pes.nomecompleto;
+      }
+    }
+    return [
+      { text: setorNome, border: [false, false, false, true], margin: [0, 10, 5, 2], fontSize: 10 },
+      { text: numAss, border: [false, false, false, true], alignment: 'center', margin: [0, 10, 5, 2], fontSize: 10 },
+      { text: `${i+1}.  ${indicadorNome}`, border: [false, false, false, true], margin: [0, 10, 0, 2], fontSize: 10 }
+    ];
+  });
+
+  if(cleanRows.length === 0){
+    cleanRows.push([
+      { text: 'Nenhum setor cadastrado', border: [false, false, false, true], margin: [0, 10, 5, 2], fontSize: 10 },
+      { text: '', border: [false, false, false, true], alignment: 'center', margin: [0, 10, 5, 2], fontSize: 10 },
+      { text: '1.', border: [false, false, false, true], margin: [0, 10, 0, 2], fontSize: 10 }
+    ]);
+  }
+
+  const docDefinition = {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 40],
+    content: [
+      { text: 'CARTÃO DE CONTAGEM DA ASSISTÊNCIA DO CONGRESSO', alignment: 'center', bold: true, fontSize: 13, margin: [0, 0, 0, 15] },
+      {
+        columns: [
+          { text: 'Capitão dos indicadores: ____________________________________________________', fontSize: 10, margin: [0, 0, 0, 15] }
+        ]
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: ['30%', '25%', '45%'],
+          body: [
+            [
+              { text: 'SETOR', bold: true, fontSize: 10, border: [false, false, false, true], margin: [0, 0, 0, 5] },
+              { text: 'N.º DE ASSENTOS', bold: true, fontSize: 10, alignment: 'center', border: [false, false, false, true], margin: [0, 0, 0, 5] },
+              { text: 'NOME DO INDICADOR', bold: true, fontSize: 10, border: [false, false, false, true], margin: [0, 0, 0, 5] }
+            ],
+            ...cleanRows
+          ]
+        }
+      },
+      {
+        columns: [
+          { text: 'CO-24-T   02/13 (01/20)', fontSize: 9, margin: [0, 30, 0, 0] }
+        ]
+      }
+    ]
+  };
+
+  pdfMake.createPdf(docDefinition).open();
+}
+
+function gerarPdfistencia(){
+  const evId = globalEventoId;
+  const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
+  const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
+
+  // Ordenar parâmetros por data
+  parametros.sort((a, b) => (a.datacont || '').localeCompare(b.datacont || ''));
+
+  const diasUnicos = [...new Set(parametros.map(p => p.datacont))];
+  const labelsDias = ['PRIMEIRO DIA', 'SEGUNDO DIA', 'TERCEIRO DIA', 'QUARTO DIA', 'QUINTO DIA', 'SEXTO DIA'];
+
+  let bodyRows = [];
+  
+  diasUnicos.forEach((dia, index) => {
+    const diaLabel = labelsDias[index] || `${index+1}º DIA`;
+    const paramsDoDia = parametros.filter(p => p.datacont === dia);
+
+    paramsDoDia.forEach((param, pIdx) => {
+      const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
+      
+      // Soma da assistência de todos os setores para este dia e período/parâmetro
+      const contsDoParam = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(param.codperiodo));
+      const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+
+      bodyRows.push([
+        { text: pIdx === 0 ? diaLabel : '', bold: true, fontSize: 10, margin: [0, 15, 0, 15] },
+        { text: horaCont, alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+        { text: somaAssistencia > 0 ? String(somaAssistencia) : '', alignment: 'center', fontSize: 11, border: [false, false, false, true], margin: [0, 15, 0, 15] }
+      ]);
+    });
+  });
+
+  if(bodyRows.length === 0){
+    bodyRows.push([
+      { text: 'PRIMEIRO DIA', bold: true, fontSize: 10, margin: [0, 15, 0, 15] },
+      { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+      { text: '', alignment: 'center', fontSize: 11, border: [false, false, false, true], margin: [0, 15, 0, 15] }
+    ]);
+  }
+
+  const docDefinition = {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 40],
+    content: [
+      { text: 'ATENÇÃO: Tenha pronto, sem falta, o total de cada sessão logo após a hora indicada abaixo, para que um representante do Departamento de Indicadores possa recolhê-lo.', fontSize: 9, bold: true, margin: [0, 0, 0, 20] },
+      {
+        table: {
+          widths: ['30%', '40%', '30%'],
+          body: [
+            [
+              { text: 'DIA', bold: true, fontSize: 10, border: [false, false, false, true], margin: [0, 0, 0, 8] },
+              { text: 'HORA DA CONTAGEM', bold: true, fontSize: 10, alignment: 'center', border: [false, false, false, true], margin: [0, 0, 0, 8] },
+              { text: 'ASSISTÊNCIA', bold: true, fontSize: 10, alignment: 'center', border: [false, false, false, true], margin: [0, 0, 0, 8] }
+            ],
+            [
+              { text: '(USE APENAS OS DIAS QUE SE APLICAM.)', colSpan: 3, alignment: 'center', fontSize: 9, color: '#64748b', border: [false, false, false, false], margin: [0, 5, 0, 15] },
+              {}, {}
+            ],
+            ...bodyRows
+          ]
+        }
+      },
+      {
+        columns: [
+          { text: 'CO-24-T   02/13 (01/20)', fontSize: 9, margin: [0, 40, 0, 0] },
+          { text: '2', alignment: 'right', fontSize: 9, margin: [0, 40, 0, 0] }
+        ]
+      }
+    ]
+  };
+
+  pdfMake.createPdf(docDefinition).open();
 }
 
 function renderDesignacoes(){
@@ -855,7 +1281,7 @@ function onSearchDesignacaoPessoa(val){
 
 function updateCounts(){
   const evId = globalEventoId;
-  ENTITIES.filter(e=>!e.isHome && !e.isCustom && !e.isCustomMap).forEach(e=>{
+  ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap).forEach(e=>{
     const el = document.getElementById('nav-count-'+e.key);
     if(el){
       const filtered = (db[e.key]||[]).filter(r => e.isGlobal || r.codevento == evId);
