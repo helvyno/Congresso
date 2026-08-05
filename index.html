@@ -8,9 +8,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-  body { font-family: 'Inter', sans-serif; }
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
+  body { font-family: 'Inter', sans-serif; overflow: hidden; }
+  .tab-content { display: none; height: calc(100vh - 65px); flex-direction: column; }
+  .tab-content.active { display: flex; }
   .nav-btn.active { background-color: #3b82f6; color: white; }
   .nav-btn { color: #94a3b8; }
   .nav-btn:hover:not(.active) { background-color: #334155; color: white; }
@@ -18,16 +18,15 @@
   ::-webkit-scrollbar-track { background: #0f172a; }
   ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: #475569; }
-  input[type="date"]::-webkit-calendar-picker-indicator,
-  input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
   .field-error { border-color: #ef4444 !important; }
   .nav-count { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.08); padding: 1px 7px; border-radius: 9999px; margin-left: auto; }
   .nav-btn.active .nav-count { background: rgba(255,255,255,.22); }
 </style>
 </head>
-<body class="bg-[#0f172a] text-white min-h-screen flex flex-col">
+<body class="bg-[#0f172a] text-white h-screen flex flex-col">
 
-  <header id="main-header" class="bg-[#1e293b] border-b border-[#334155] px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 shadow-md">
+  <header id="main-header" class="bg-[#1e293b] border-b border-[#334155] px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-md">
     <div class="flex items-center gap-3">
       <button onclick="toggleSidebar()" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-[#0f172a] border border-[#334155] text-[#94a3b8] hover:text-white transition-colors" title="Ocultar/Exibir Menu">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
@@ -53,13 +52,13 @@
     </div>
   </header>
 
-  <div class="flex flex-row flex-1 min-h-[calc(100vh-65px)] overflow-hidden relative">
-    <aside id="sidebar-nav" class="w-64 bg-[#1e293b] border-r border-[#334155] p-3 md:p-4 overflow-y-auto transition-all duration-300 fixed inset-y-[65px] left-0 z-40 hidden shadow-2xl">
+  <div class="flex flex-row flex-1 h-[calc(100vh-65px)] overflow-hidden relative">
+    <aside id="sidebar-nav" class="w-64 bg-[#1e293b] border-r border-[#334155] p-3 md:p-4 overflow-y-auto transition-all duration-300 absolute inset-y-0 left-0 z-40 hidden shadow-2xl">
       <nav id="nav" class="flex flex-col gap-1"></nav>
     </aside>
 
-    <main class="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto w-full">
-      <div id="tabs-root"></div>
+    <main class="flex-1 min-w-0 p-4 md:p-6 overflow-hidden flex flex-col w-full">
+      <div id="tabs-root" class="flex-1 flex flex-col min-h-0"></div>
     </main>
   </div>
 
@@ -144,12 +143,11 @@ const ENTITIES = [
   { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>r.descricao, isGlobal:true, fields:[
     {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'}
   ]},
-  { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} (${r.horaini}-${r.horafim})`, fields:[
+  { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
     {name:'datacont', label:'Data da Contagem', type:'date', required:true, limitToEvent:true},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
-    {name:'horaini', label:'Hora Início', type:'time', required:true},
-    {name:'horafim', label:'Hora Fim', type:'time', required:true}
+    {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
   ]},
   { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', display:r=>r.nomecompleto, fields:[
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
@@ -162,13 +160,13 @@ const ENTITIES = [
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true, searchable:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
-    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true},
+    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
     {name:'hora_inicio', label:'Hora início', type:'time', required:true},
     {name:'hora_fim', label:'Hora fim', type:'time', required:true}
   ]},
   { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', display:r=>String(r.quantidade), fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
-    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true},
+    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true},
@@ -366,42 +364,44 @@ function buildLayout(){
   const root = document.getElementById('tabs-root');
   root.innerHTML = ENTITIES.map(e=>{
     if(e.isHome){
-      return `<div id="tab-home" class="tab-content ${current==='home'?'active':''}"></div>`;
+      return `<div id="tab-home" class="tab-content overflow-y-auto ${current==='home'?'active':''}"></div>`;
     }
     if(e.isCustom){
-      return `<div id="tab-designacoes" class="tab-content ${current==='designacoes'?'active':''}"></div>`;
+      return `<div id="tab-designacoes" class="tab-content overflow-y-auto ${current==='designacoes'?'active':''}"></div>`;
     }
     if(e.isCustomMap){
-      return `<div id="tab-mapa" class="tab-content ${current==='mapa'?'active':''}"></div>`;
+      return `<div id="tab-mapa" class="tab-content overflow-y-auto ${current==='mapa'?'active':''}"></div>`;
     }
     return `
       <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
-        <div class="mb-6 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 class="text-2xl font-bold text-white mb-1">${e.plural}</h2>
-            <p class="text-[#94a3b8] text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
+        <div class="flex-shrink-0 mb-4">
+          <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <h2 class="text-2xl font-bold text-white mb-1">${e.plural}</h2>
+              <p class="text-[#94a3b8] text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
+            </div>
+            ${(!isPublicView || (e.key === 'contagem')) ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+              Novo ${e.label}
+            </button>` : `<button onclick="openEntityModal('evento')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">Novo Evento</button>`) : ''}
           </div>
-          ${(!isPublicView || e.key === 'contagem') ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-            Novo ${e.label}
-          </button>` : `<button onclick="openEntityModal('evento')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">Novo Evento</button>`) : ''}
+          <div class="flex items-center gap-3 flex-wrap">
+            <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+              class="w-full sm:w-72 bg-[#1e293b] border border-[#334155] rounded-lg px-4 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+          </div>
         </div>
-        <div class="mb-4 flex items-center gap-3 flex-wrap">
-          <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
-            class="w-full sm:w-72 bg-[#0f172a] border border-[#334155] rounded-lg px-4 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
-        </div>
-        <div class="bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="bg-[#0f172a]/50 text-left text-xs text-[#94a3b8] uppercase tracking-wider">
-                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...e.fields.map(f=>f.label), (!isPublicView || e.key === 'contagem' ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3">${h}</th>`).join('')}
+        <div class="flex-1 bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden flex flex-col min-h-0 mb-6">
+          <div class="flex-1 overflow-y-auto relative pb-16">
+            <table class="w-full text-sm border-collapse">
+              <thead class="sticky top-0 z-20 bg-[#0f172a]">
+                <tr class="text-left text-xs text-[#94a3b8] uppercase tracking-wider border-b border-[#334155]">
+                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...e.fields.map(f=>f.label), (!isPublicView || (e.key === 'contagem' && !isPublicView) ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-[#0f172a]">${h}</th>`).join('')}
                 </tr>
               </thead>
               <tbody id="tabela-${e.key}"></tbody>
             </table>
+            <div id="empty-${e.key}" class="hidden text-center text-[#64748b] text-sm py-12"></div>
           </div>
-          <div id="empty-${e.key}" class="hidden text-center text-[#64748b] text-sm py-12"></div>
         </div>
       </div>
     `;
@@ -540,7 +540,7 @@ function renderDashboard(){
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
       <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6">
         <h3 class="text-base font-bold text-white mb-4 flex items-center justify-between">
           <span>Contagem por Setor (Filtro Atual)</span>
@@ -717,33 +717,35 @@ function renderDesignacoes(){
   }
 
   tabDes.innerHTML = `
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h2 class="text-2xl font-bold text-white mb-1">Designações de Indicadores</h2>
-        <p class="text-[#94a3b8] text-sm">Escalas e contato direto via WhatsApp</p>
-      </div>
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
-          <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
-          <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
-            ${dateOptionsHtml}
-          </select>
+    <div class="flex-shrink-0 mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-white mb-1">Designações de Indicadores</h2>
+          <p class="text-[#94a3b8] text-sm">Escalas e contato direto via WhatsApp</p>
         </div>
-        <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
+            <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
+            <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+              ${dateOptionsHtml}
+            </select>
+          </div>
+          <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+        </div>
       </div>
     </div>
 
-    <div class="bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-[#0f172a]/50 text-left text-xs text-[#94a3b8] uppercase tracking-wider">
-              <th class="px-6 py-3">Data</th>
-              <th class="px-6 py-3">Pessoa</th>
-              <th class="px-6 py-3">Setor</th>
-              <th class="px-6 py-3">Início</th>
-              <th class="px-6 py-3">Fim</th>
-              <th class="px-6 py-3">Telefone (WhatsApp)</th>
+    <div class="flex-1 bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden flex flex-col min-h-0 mb-6">
+      <div class="flex-1 overflow-y-auto relative pb-16">
+        <table class="w-full text-sm border-collapse">
+          <thead class="sticky top-0 z-20 bg-[#0f172a]">
+            <tr class="text-left text-xs text-[#94a3b8] uppercase tracking-wider border-b border-[#334155]">
+              <th class="px-6 py-3 bg-[#0f172a]">Data</th>
+              <th class="px-6 py-3 bg-[#0f172a]">Pessoa</th>
+              <th class="px-6 py-3 bg-[#0f172a]">Setor</th>
+              <th class="px-6 py-3 bg-[#0f172a]">Início</th>
+              <th class="px-6 py-3 bg-[#0f172a]">Fim</th>
+              <th class="px-6 py-3 bg-[#0f172a]">Telefone (WhatsApp)</th>
             </tr>
           </thead>
           <tbody>
@@ -770,7 +772,7 @@ async function renderMapa(){
   let uploadSection = '';
   if (!isPublicView) {
     uploadSection = `
-      <div class="mb-6 bg-[#1e293b] border border-[#334155] rounded-xl p-4 flex items-center justify-between flex-wrap gap-4">
+      <div class="mb-6 bg-[#1e293b] border border-[#334155] rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0">
         <div>
           <h4 class="text-sm font-bold text-white mb-1">Atualizar Imagem do Mapa</h4>
           <p class="text-xs text-[#94a3b8]">Selecione um arquivo de imagem (JPG ou PNG) do seu computador para definir o mapa deste evento.</p>
@@ -796,12 +798,12 @@ async function renderMapa(){
   }
 
   tabMapa.innerHTML = `
-    <div class="mb-6">
+    <div class="flex-shrink-0 mb-4">
       <h2 class="text-2xl font-bold text-white mb-1">Mapa do Evento</h2>
       <p class="text-[#94a3b8] text-sm">Visualização detalhada do layout e setores do congresso</p>
     </div>
     ${uploadSection}
-    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 flex justify-center items-center shadow-lg min-h-[300px]">
+    <div class="flex-1 bg-[#1e293b] border border-[#334155] rounded-xl p-6 flex justify-center items-center shadow-lg overflow-y-auto mb-6">
       ${contentHtml}
     </div>
   `;
@@ -911,11 +913,12 @@ function renderTable(key){
       }
       let val = r[f.name];
       if(f.type==='date') val = formatDateBR(val);
+      if(f.name==='ativo') val = (val===true || val==='true') ? 'SIM' : 'NÃO';
       return `<td class="px-6 py-4 text-[#cbd5e1]">${val!==undefined && val!==null && val!=='' ? escapeHtml(String(val)) : '—'}</td>`;
     }).join('');
     
     let actionsCell = '';
-    const showEdit = !isPublicView || key === 'contagem';
+    const showEdit = !isPublicView || (key === 'contagem' && !isPublicView);
     const showDelete = !isPublicView;
 
     if (showEdit || showDelete) {
@@ -934,7 +937,7 @@ function renderTable(key){
 }
 
 function openEntityModal(key, id){
-  if(isPublicView && key !== 'contagem') return;
+  if(isPublicView && key === 'contagem' && id !== undefined) return;
   const ent = entity(key);
   modalState = { key, editingId: id!==undefined ? id : null };
   const record = id!==undefined ? findRecord(key,id) : null;
@@ -951,22 +954,33 @@ function openEntityModal(key, id){
       val = globalEventoId;
     }
 
+    if(!record && f.type === 'date' && (key === 'contagem' || key === 'escalas')) {
+      val = '';
+    }
+
     let control;
     const base = "w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]";
     
-    if(f.type==='fk'){
+    if(f.name === 'ativo' && key === 'parametros'){
+      const isChecked = record ? (record.ativo === true || record.ativo === 'true') : true;
+      control = `<div class="flex items-center gap-3 pt-1">
+        <input type="checkbox" data-field="${f.name}" ${isChecked ? 'checked' : ''} class="w-5 h-5 accent-[#3b82f6] rounded cursor-pointer">
+        <span class="text-sm text-[#cbd5e1]">Liberado para contagens neste dia</span>
+      </div>`;
+    } else if(f.type==='fk'){
       const refEnt = entity(f.ref);
       let refList = db[f.ref] || [];
       if(!refEnt.isGlobal && f.fixedToGlobal && globalEventoId){
         refList = refList.filter(r => r.codevento == globalEventoId);
       }
+
       const opts = refList.map(r=>{
         const rid = r[refEnt.pk];
         return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
       }).join('');
       
       if(f.fixedToGlobal && !ent.isGlobal){
-        control = `<select data-field="${f.name}" class="${base} bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</option></select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
+        control = `<select data-field="${f.name}" class="${base} bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
       } else {
         control = `<select data-field="${f.name}" class="${base}"><option value="">Selecione…</option>${opts}</select>`;
       }
@@ -976,9 +990,17 @@ function openEntityModal(key, id){
       if(f.limitToEvent && ev && ev.data_inicio && ev.data_final){
         minAttr = `min="${ev.data_inicio}"`;
         maxAttr = `max="${ev.data_final}"`;
-        if(!val) val = ev.data_inicio;
       }
-      control = `<input type="date" data-field="${f.name}" value="${val||''}" ${minAttr} ${maxAttr} class="${base}">`;
+
+      if(key === 'contagem' && f.name === 'data'){
+        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
+        const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont))].sort();
+        
+        let dateOpts = '<option value="">Selecione uma data liberada…</option>' + datasAtivas.map(d => `<option value="${d}" ${val === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
+        control = `<select data-field="${f.name}" class="${base}">${dateOpts}</select>`;
+      } else {
+        control = `<input type="date" data-field="${f.name}" value="${val||''}" ${minAttr} ${maxAttr} class="${base}">`;
+      }
     } else if(f.type==='time'){
       control = `<input type="time" data-field="${f.name}" value="${val||''}" class="${base}">`;
     } else if(f.type==='number'){
@@ -999,7 +1021,7 @@ function openEntityModal(key, id){
 document.getElementById('entity-form').addEventListener('submit', async function(ev){
   ev.preventDefault();
   const { key, editingId } = modalState;
-  if(isPublicView && key !== 'contagem') return;
+  if(isPublicView && key === 'contagem' && editingId !== null) return;
   const ent = entity(key);
   const form = ev.target;
   const values = {};
@@ -1013,13 +1035,19 @@ document.getElementById('entity-form').addEventListener('submit', async function
     const wrap = form.querySelector(`[data-field-wrap="${f.name}"]`);
     const err = wrap.querySelector('.err-msg');
     el.classList.remove('field-error'); err.classList.add('hidden');
-    let raw = el.value;
+    let raw;
+
+    if(f.name === 'ativo' && key === 'parametros'){
+      raw = el.checked;
+    } else {
+      raw = el.value;
+    }
 
     if(!ent.isGlobal && f.fixedToGlobal && !editingId && f.name === 'codevento' && globalEventoId){
       raw = globalEventoId;
     }
 
-    if(f.required && !raw){
+    if(f.required && !raw && raw !== false){
       el.classList.add('field-error');
       err.textContent = 'Campo obrigatório.';
       err.classList.remove('hidden');
@@ -1027,7 +1055,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
       return;
     }
 
-    if(f.type === 'date' && f.limitToEvent && eventoObj && raw){
+    if(f.type === 'date' && f.limitToEvent && eventoObj && raw && key !== 'contagem'){
       if(raw < eventoObj.data_inicio || raw > eventoObj.data_final){
         el.classList.add('field-error');
         err.textContent = `A data deve estar entre ${formatDateBR(eventoObj.data_inicio)} e ${formatDateBR(eventoObj.data_final)}.`;
@@ -1037,11 +1065,17 @@ document.getElementById('entity-form').addEventListener('submit', async function
       }
     }
 
-    if(f.type==='fk'){ values[f.name] = raw ? Number(raw) : null; }
-    else if(f.type==='number'){ values[f.name] = raw!=='' ? Number(raw) : null; }
-    else if(f.type==='date'){ values[f.name] = raw || null; }
-    else if(f.type==='time'){ values[f.name] = raw || null; }
-    else { 
+    if(f.name === 'ativo' && key === 'parametros'){
+      values[f.name] = raw;
+    } else if(f.type==='fk'){
+      values[f.name] = raw ? Number(raw) : null;
+    } else if(f.type==='number'){
+      values[f.name] = raw!=='' ? Number(raw) : null;
+    } else if(f.type==='date'){
+      values[f.name] = raw || null;
+    } else if(f.type==='time'){
+      values[f.name] = raw || null;
+    } else { 
       values[f.name] = (f.name === 'email') ? (raw ? raw.trim().toLowerCase() : null) : (raw ? raw.trim().toUpperCase() : null); 
     }
   });

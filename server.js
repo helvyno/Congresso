@@ -40,17 +40,19 @@ async function initDatabase() {
       console.log('✨ Períodos padrão (MANHÃ, TARDE) inseridos com sucesso!');
     }
 
-    // Tabela PARAMETROS solicitada
+    // Tabela PARAMETROS atualizada com o campo 'ativo' e sem horários
     await client.query(`
       CREATE TABLE IF NOT EXISTS parametros (
           codparametro SERIAL PRIMARY KEY,
           datacont DATE NOT NULL,
           codperiodo INTEGER NOT NULL,
-          horaini TIME NOT NULL,
-          horafim TIME NOT NULL,
-          codevento INTEGER
+          codevento INTEGER,
+          ativo BOOLEAN DEFAULT TRUE
       );
     `);
+    await client.query(`ALTER TABLE parametros ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;`);
+    await client.query(`ALTER TABLE parametros DROP COLUMN IF EXISTS horaini;`);
+    await client.query(`ALTER TABLE parametros DROP COLUMN IF EXISTS horafim;`);
 
     // Tabela configmapa
     await client.query(`
@@ -96,18 +98,15 @@ app.post('/api/configmapa/salvar', async (req, res) => {
       return res.status(400).json({ error: 'Evento não especificado para o mapa.' });
     }
 
-    // Verifica se já existe mapa para este evento
     const existe = await pool.query('SELECT codmapa FROM configmapa WHERE codevento = $1', [codevento]);
     
     let result;
     if (existe.rows.length > 0) {
-      // Atualiza
       result = await pool.query(
         'UPDATE configmapa SET imagem_base64 = $1 WHERE codevento = $2 RETURNING *',
         [imagem_base64, codevento]
       );
     } else {
-      // Insere
       result = await pool.query(
         'INSERT INTO configmapa (codevento, imagem_base64) VALUES ($1, $2) RETURNING *',
         [codevento, imagem_base64]
@@ -130,7 +129,7 @@ const TABLES = {
   escalas: { pk: 'codescala', columns: ['codevento', 'codpessoa', 'codsetor', 'data', 'hora_inicio', 'hora_fim'] },
   contagem: { pk: 'codcont', columns: ['codevento', 'codsetor', 'codpessoa', 'quantidade', 'data', 'codperiodo'] },
   usuario: { pk: 'codusuario', columns: ['nome', 'email', 'senha', 'ativo'] },
-  parametros: { pk: 'codparametro', columns: ['datacont', 'codperiodo', 'horaini', 'horafim', 'codevento'] },
+  parametros: { pk: 'codparametro', columns: ['datacont', 'codperiodo', 'codevento', 'ativo'] },
   configmapa: { pk: 'codmapa', columns: ['codevento', 'imagem_base64'] }
 };
 
@@ -141,7 +140,7 @@ function sanitizeBody(body) {
     if (typeof val === 'string' && key !== 'imagem_base64') {
       if (key === 'email') {
         sanitized[key] = val.trim().toLowerCase();
-      } else if (key === 'data' || key === 'data_inicio' || key === 'data_final' || key === 'datacont' || key === 'horaini' || key === 'horafim') {
+      } else if (key === 'data' || key === 'data_inicio' || key === 'data_final' || key === 'datacont') {
         sanitized[key] = val;
       } else {
         sanitized[key] = val.trim().toUpperCase();
@@ -190,23 +189,19 @@ Object.keys(TABLES).forEach(tableName => {
     try {
       const cleanBody = sanitizeBody(req.body);
 
-      // Validação específica para CONTAGEM baseada na tabela PARAMETROS
+      // Validação de CONTAGEM baseada na tabela PARAMETROS (verificando se o parâmetro está ativo para a data/período)
       if (tableName === 'contagem') {
         const { data, codperiodo, codevento } = cleanBody;
-        const horaAtual = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
 
         const paramQuery = await pool.query(
-          `SELECT * FROM parametros WHERE datacont = $1 AND codperiodo = $2 AND (codevento = $3 OR codevento IS NULL)`,
+          `SELECT * FROM parametros WHERE datacont = $1 AND codperiodo = $2 AND (codevento = $3 OR codevento IS NULL) AND ativo = true`,
           [data, codperiodo, codevento]
         );
 
-        if (paramQuery.rows.length > 0) {
-          const param = paramQuery.rows[0];
-          if (horaAtual < param.horaini || horaAtual > param.horafim) {
-            return res.status(400).json({ 
-              error: `Atenção: A inclusão de registros para esta data e período só é permitida entre ${param.horaini} e ${param.horafim}. Horário atual fora do parâmetro permitido.` 
-            });
-          }
+        if (paramQuery.rows.length === 0) {
+          return res.status(400).json({ 
+            error: 'Contagem não Liberada, aguarde liberação da Mesa' 
+          });
         }
       }
 
@@ -231,6 +226,22 @@ Object.keys(TABLES).forEach(tableName => {
     try {
       const { id } = req.params;
       const cleanBody = sanitizeBody(req.body);
+
+      // Validação de CONTAGEM no UPDATE também
+      if (tableName === 'contagem') {
+        const { data, codperiodo, codevento } = cleanBody;
+        const paramQuery = await pool.query(
+          `SELECT * FROM parametros WHERE datacont = $1 AND codperiodo = $2 AND (codevento = $3 OR codevento IS NULL) AND ativo = true`,
+          [data, codperiodo, codevento]
+        );
+
+        if (paramQuery.rows.length === 0) {
+          return res.status(400).json({ 
+            error: 'Contagem não Liberada, aguarde liberação da Mesa' 
+          });
+        }
+      }
+
       const cols = cfg.columns;
       const setClause = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
       const values = cols.map(c => cleanBody[c] !== undefined ? cleanBody[c] : null);
