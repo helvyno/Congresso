@@ -323,7 +323,7 @@ async function checkDbStatus(){
     const r = await fetch(`${API_BASE}/api/health/check`);
     const data = await r.json();
     if(r.ok && data.status==='ok'){
-      el.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Neon conectado';
+      el.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Conectado';
     } else { throw new Error(); }
   }catch(err){
     el.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Sem conexão';
