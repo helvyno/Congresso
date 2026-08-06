@@ -579,7 +579,6 @@ function renderDashboard(){
     ? setoresPendentes.map(s => `<span class="inline-block bg-[#ef4444]/10 text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5">${escapeHtml(s.descricao)}</span>`).join('')
     : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta seleção!</p>';
 
-  // Períodos com base exclusivamente na tabela de parâmetros (independente de ativo)
   const periodosIdsParametros = new Set(parametros.map(p => String(p.codperiodo)));
   const periodosParametros = periodos.filter(p => periodosIdsParametros.has(String(p.codperiodo)));
 
@@ -1200,12 +1199,23 @@ function renderDesignacoes(){
   const evId = globalEventoId;
   let escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
 
+  // Ordenação das designações / WhatsApp: Data, Setor, Período, Nome
   escalas.sort((a, b) => {
-    if (a.data !== b.data) return (a.data || '').localeCompare(b.data || '');
+    const dataA = (a.data || '').split('T')[0];
+    const dataB = (b.data || '').split('T')[0];
+    if (dataA !== dataB) return dataA.localeCompare(dataB);
+
     const setorA = refRelationDescricao('setor', a.codsetor);
     const setorB = refRelationDescricao('setor', b.codsetor);
     if (setorA !== setorB) return setorA.localeCompare(setorB);
-    return (a.hora_inicio || '').localeCompare(b.hora_inicio || '');
+
+    const perA = refRelationDescricao('periodo', a.codperiodo);
+    const perB = refRelationDescricao('periodo', b.codperiodo);
+    if (perA !== perB) return perA.localeCompare(perB);
+
+    const pessoaA = refRelationDescricao('pessoa', a.codpessoa);
+    const pessoaB = refRelationDescricao('pessoa', b.codpessoa);
+    return pessoaA.localeCompare(pessoaB);
   });
 
   let escalasFiltradas = escalas;
@@ -1445,6 +1455,27 @@ function renderTable(key){
     });
   }
 
+  // Ordenação específica para a tela de Escalas: Data, Setor, Período, Nome
+  if (key === 'escalas') {
+    rows.sort((a, b) => {
+      const dataA = (a.data || '').split('T')[0];
+      const dataB = (b.data || '').split('T')[0];
+      if (dataA !== dataB) return dataA.localeCompare(dataB);
+
+      const setorA = refRelationDescricao('setor', a.codsetor);
+      const setorB = refRelationDescricao('setor', b.codsetor);
+      if (setorA !== setorB) return setorA.localeCompare(setorB);
+
+      const perA = refRelationDescricao('periodo', a.codperiodo);
+      const perB = refRelationDescricao('periodo', b.codperiodo);
+      if (perA !== perB) return perA.localeCompare(perB);
+
+      const pessoaA = refRelationDescricao('pessoa', a.codpessoa);
+      const pessoaB = refRelationDescricao('pessoa', b.codpessoa);
+      return pessoaA.localeCompare(pessoaB);
+    });
+  }
+
   if(ent._search){
     const q = ent._search;
     rows = rows.filter(r=>{
@@ -1561,7 +1592,6 @@ function openEntityModal(key, id){
       }
 
       if(key === 'contagem' && f.name === 'data'){
-        // Considera todas as datas cadastradas na tabela de parâmetros independentemente se está ativo ou não
         const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId));
         const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : ''))].filter(Boolean).sort();
         
