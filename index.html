@@ -65,7 +65,6 @@
     </main>
   </div>
 
-  <!-- Modal genérico para formulários -->
   <div id="modal-form" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
     <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
       <div class="flex items-center justify-between mb-1">
@@ -85,7 +84,6 @@
     </div>
   </div>
 
-  <!-- Modal para filtro do relatório de setores -->
   <div id="modal-report-filter" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
     <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-md p-6 shadow-2xl">
       <div class="flex items-center justify-between mb-1">
@@ -602,7 +600,6 @@ function renderDashboard(){
       </div>
     </div>
 
-    <!-- Gráfico 1: Volume Total de Contagem por Data / Período -->
     <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
       <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
       <div class="relative w-full h-[300px]">
@@ -750,7 +747,6 @@ function renderRelatorios(){
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <!-- Card Relatório 1 -->
       <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 shadow-xl flex flex-col justify-between">
         <div>
           <div class="w-12 h-12 rounded-lg bg-[#3b82f6]/10 text-[#3b82f6] flex items-center justify-center mb-4">
@@ -765,7 +761,6 @@ function renderRelatorios(){
         </button>
       </div>
 
-      <!-- Card Relatório 2 -->
       <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 shadow-xl flex flex-col justify-between">
         <div>
           <div class="w-12 h-12 rounded-lg bg-[#10b981]/10 text-[#10b981] flex items-center justify-center mb-4">
@@ -781,7 +776,6 @@ function renderRelatorios(){
       </div>
     </div>
 
-    <!-- Filtros para os Gráficos -->
     <div class="mb-4 flex flex-wrap items-center justify-between gap-4 bg-[#1e293b] p-4 rounded-xl border border-[#334155]">
       <div>
         <h3 class="text-base font-bold text-white">Análise Gráfica</h3>
@@ -803,7 +797,6 @@ function renderRelatorios(){
       </div>
     </div>
 
-    <!-- Gráfico 1 de Relatórios: Volume Total por Data / Período -->
     <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
       <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
       <div class="relative w-full h-[300px]">
@@ -811,7 +804,6 @@ function renderRelatorios(){
       </div>
     </div>
 
-    <!-- Gráfico 2 de Relatórios: Quantidade de Contagem por Setor -->
     <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl pb-12">
       <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Quantidade da Contagem por Setor (por Data / Período)</h3>
       <div class="relative w-full h-[380px]">
@@ -1524,8 +1516,8 @@ function openEntityModal(key, id){
       let minAttr = '';
       let maxAttr = '';
       if(f.limitToEvent && ev && ev.data_inicio && ev.data_final){
-        minAttr = `min="${ev.data_inicio}"`;
-        maxAttr = `max="${ev.data_final}"`;
+        minAttr = `min="${ev.data_inicio.split('T')[0]}"`;
+        maxAttr = `max="${ev.data_final.split('T')[0]}"`;
       }
 
       if(key === 'contagem' && f.name === 'data'){
@@ -1535,7 +1527,7 @@ function openEntityModal(key, id){
         let dateOpts = '<option value="">Selecione uma data liberada…</option>' + datasAtivas.map(d => `<option value="${d}" ${val === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
         control = `<select data-field="${f.name}" class="${base}">${dateOpts}</select>`;
       } else {
-        control = `<input type="date" data-field="${f.name}" value="${val||''}" ${minAttr} ${maxAttr} class="${base}">`;
+        control = `<input type="date" data-field="${f.name}" value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
       }
     } else if(f.type==='time'){
       const readonlyAttr = f.readonly ? 'readonly style="background-color: #111827; color: #9ca3af; cursor: not-allowed;"' : '';
@@ -1585,7 +1577,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
   const values = {};
   let hasError = false;
 
-  const eventoObj = (db['evento']||[]).find(e => e.codevento == globalEventoId);
+  const eventoObj = (db['evento']||[]).find(e => Number(e.codevento) === Number(globalEventoId));
 
   ent.fields.forEach(f=>{
     const el = form.querySelector(`[data-field="${f.name}"]`);
@@ -1614,10 +1606,14 @@ document.getElementById('entity-form').addEventListener('submit', async function
     }
 
     if(f.type === 'date' && f.limitToEvent && eventoObj && raw && key !== 'contagem'){
-      if(raw < eventoObj.data_inicio || raw > eventoObj.data_final){
+      const rawDate = new Date(raw + 'T00:00:00');
+      const inicioDate = new Date(eventoObj.data_inicio.split('T')[0] + 'T00:00:00');
+      const finalDate = new Date(eventoObj.data_final.split('T')[0] + 'T00:00:00');
+
+      if(rawDate < inicioDate || rawDate > finalDate){
         el.classList.add('field-error');
         err.textContent = `A data deve estar entre ${formatDateBR(eventoObj.data_inicio)} e ${formatDateBR(eventoObj.data_final)}.`;
-        err.classList.add('hidden');
+        err.classList.remove('hidden');
         hasError = true;
         return;
       }
