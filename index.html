@@ -1,10 +1,15 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GESTÃO DE INDICADORES - DATASABE Sistemas</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+  }
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
@@ -14,49 +19,60 @@
   .tab-content { display: none; height: calc(100vh - 65px); flex-direction: column; }
   .tab-content.active { display: flex; }
   .nav-btn.active { background-color: #3b82f6; color: white; }
-  .nav-btn { color: #94a3b8; }
-  .nav-btn:hover:not(.active) { background-color: #334155; color: white; }
+  .nav-btn { color: #64748b; }
+  .dark .nav-btn { color: #94a3b8; }
+  .nav-btn:hover:not(.active) { background-color: #f1f5f9; color: #0f172a; }
+  .dark .nav-btn:hover:not(.active) { background-color: #334155; color: white; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: #0f172a; }
-  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #475569; }
-  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
-  input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  ::-webkit-scrollbar-track { background: #f8fafc; }
+  .dark ::-webkit-scrollbar-track { background: #0f172a; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .dark ::-webkit-scrollbar-thumb { background: #334155; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
   .field-error { border-color: #ef4444 !important; }
-  .nav-count { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.08); padding: 1px 7px; border-radius: 9999px; margin-left: auto; }
-  .nav-btn.active .nav-count { background: rgba(255,255,255,.22); }
+  .nav-count { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(0,0,0,.06); padding: 1px 7px; border-radius: 9999px; margin-left: auto; }
+  .dark .nav-count { background: rgba(255,255,255,.08); }
+  .nav-btn.active .nav-count { background: rgba(255,255,255,.25); }
 </style>
 </head>
-<body class="bg-[#0f172a] text-white h-screen flex flex-col">
+<body class="bg-slate-100 dark:bg-[#0f172a] text-slate-800 dark:text-white h-screen flex flex-col transition-colors duration-200">
 
-  <header id="main-header" class="bg-[#1e293b] border-b border-[#334155] px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-md">
+  <header id="main-header" class="bg-white dark:bg-[#1e293b] border-b border-slate-200 dark:border-[#334155] px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-sm">
     <div class="flex items-center gap-3">
-      <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-[#0f172a] border border-[#334155] text-[#94a3b8] hover:text-white transition-colors" title="Ocultar/Exibir Menu">
+      <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] text-slate-600 dark:text-[#94a3b8] hover:text-slate-900 dark:hover:text-white transition-colors" title="Ocultar/Exibir Menu">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
-      <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-lg border border-[#334155] bg-white">
+      <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-200 dark:border-[#334155] bg-white">
       <div>
-        <h1 class="text-lg font-bold text-white tracking-tight">Gestão de Indicadores</h1>
-        <p class="text-xs text-[#94a3b8] hidden sm:block">DATASABE Sistemas</p>
+        <h1 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Indicadores</h1>
+        <p class="text-xs text-slate-500 dark:text-[#94a3b8] hidden sm:block">DATASABE Sistemas</p>
       </div>
     </div>
 
-    <div id="evento-filter-wrapper" class="flex items-center gap-2 bg-[#0f172a] px-3 py-1.5 rounded-lg border border-[#334155]">
-      <span class="text-xs text-[#94a3b8] font-medium whitespace-nowrap">Evento Ativo:</span>
-      <select id="global-evento-filter" onchange="changeGlobalEvento(this.value)" class="bg-transparent text-sm font-semibold text-[#3b82f6] focus:outline-none cursor-pointer">
+    <div id="evento-filter-wrapper" class="flex items-center gap-2 bg-slate-50 dark:bg-[#0f172a] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#334155]">
+      <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium whitespace-nowrap">Evento Ativo:</span>
+      <select id="global-evento-filter" onchange="changeGlobalEvento(this.value)" class="bg-transparent text-sm font-semibold text-blue-600 dark:text-[#3b82f6] focus:outline-none cursor-pointer">
         <option value="">Carregando eventos...</option>
       </select>
     </div>
 
     <div class="flex items-center gap-3">
-      <span id="db-status" class="text-xs text-[#94a3b8] flex items-center gap-1.5 whitespace-nowrap">
-        <span class="w-2 h-2 rounded-full bg-[#64748b]"></span> verificando…
+      <!-- Botão de Alternância de Tema (Sempre visível antes do status) -->
+      <button onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] text-slate-600 dark:text-[#94a3b8] hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium" title="Alternar Tema Claro/Escuro">
+        <svg id="theme-icon-light" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        <svg id="theme-icon-dark" class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+        <span class="hidden sm:inline">Tema</span>
+      </button>
+
+      <span id="db-status" class="text-xs text-slate-500 dark:text-[#94a3b8] flex items-center gap-1.5 whitespace-nowrap">
+        <span class="w-2 h-2 rounded-full bg-slate-400 dark:bg-[#64748b]"></span> verificando…
       </span>
     </div>
   </header>
 
   <div class="flex flex-row flex-1 h-[calc(100vh-65px)] overflow-hidden relative">
-    <aside id="sidebar-nav" class="w-64 bg-[#1e293b] border-r border-[#334155] p-3 md:p-4 overflow-y-auto transition-all duration-300 absolute inset-y-0 left-0 z-40 hidden shadow-2xl">
+    <aside id="sidebar-nav" class="w-64 bg-white dark:bg-[#1e293b] border-r border-slate-200 dark:border-[#334155] p-3 md:p-4 overflow-y-auto transition-all duration-300 absolute inset-y-0 left-0 z-40 hidden shadow-xl">
       <nav id="nav" class="flex flex-col gap-1"></nav>
     </aside>
 
@@ -65,53 +81,53 @@
     </main>
   </div>
 
-  <div id="modal-form" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
-    <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
+  <div id="modal-form" class="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 hidden items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-[#1e293b] rounded-xl border border-slate-200 dark:border-[#334155] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
       <div class="flex items-center justify-between mb-1">
-        <h3 id="modal-title" class="text-lg font-bold text-white">Novo registro</h3>
-        <button onclick="closeModal('modal-form')" class="text-[#94a3b8] hover:text-white">
+        <h3 id="modal-title" class="text-lg font-bold text-slate-900 dark:text-white">Novo registro</h3>
+        <button onclick="closeModal('modal-form')" class="text-slate-400 hover:text-slate-700 dark:text-[#94a3b8] dark:hover:text-white">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
-      <p id="modal-sub" class="text-xs text-[#94a3b8] mb-5"></p>
+      <p id="modal-sub" class="text-xs text-slate-500 dark:text-[#94a3b8] mb-5"></p>
       <form id="entity-form" class="space-y-4">
         <div id="modal-fields"></div>
         <div class="flex gap-3 pt-2">
-          <button type="submit" id="modal-save-btn" class="flex-1 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors">Salvar</button>
-          <button type="button" onclick="closeModal('modal-form')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-[#94a3b8] border border-[#334155] hover:bg-[#334155]">Cancelar</button>
+          <button type="submit" id="modal-save-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors shadow-sm">Salvar</button>
+          <button type="button" onclick="closeModal('modal-form')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-[#94a3b8] border border-slate-200 dark:border-[#334155] hover:bg-slate-50 dark:hover:bg-[#334155]">Cancelar</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="modal-report-filter" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
-    <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-md p-6 shadow-2xl">
+  <div id="modal-report-filter" class="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 hidden items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-[#1e293b] rounded-xl border border-slate-200 dark:border-[#334155] w-full max-w-md p-6 shadow-2xl">
       <div class="flex items-center justify-between mb-1">
-        <h3 class="text-lg font-bold text-white">Gerar Cartão de Setores</h3>
-        <button onclick="closeModal('modal-report-filter')" class="text-[#94a3b8] hover:text-white">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Gerar Cartão de Setores</h3>
+        <button onclick="closeModal('modal-report-filter')" class="text-slate-400 hover:text-slate-700 dark:text-[#94a3b8] dark:hover:text-white">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
-      <p class="text-xs text-[#94a3b8] mb-5">Selecione o dia e o período para buscar os indicadores escalados:</p>
+      <p class="text-xs text-slate-500 dark:text-[#94a3b8] mb-5">Selecione o dia e o período para buscar os indicadores escalados:</p>
       <div class="space-y-4">
         <div>
-          <label class="block text-xs font-medium text-[#94a3b8] mb-1.5">Data <span class="text-[#ef4444]">*</span></label>
-          <select id="report-filter-date" class="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"></select>
+          <label class="block text-xs font-medium text-slate-600 dark:text-[#94a3b8] mb-1.5">Data <span class="text-red-500">*</span></label>
+          <select id="report-filter-date" class="w-full bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"></select>
         </div>
         <div>
-          <label class="block text-xs font-medium text-[#94a3b8] mb-1.5">Período <span class="text-[#ef4444]">*</span></label>
-          <select id="report-filter-periodo" class="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"></select>
+          <label class="block text-xs font-medium text-slate-600 dark:text-[#94a3b8] mb-1.5">Período <span class="text-red-500">*</span></label>
+          <select id="report-filter-periodo" class="w-full bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"></select>
         </div>
         <div class="flex gap-3 pt-2">
-          <button type="button" onclick="confirmarGerarPdfSetores()" class="flex-1 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors">Gerar PDF</button>
-          <button type="button" onclick="closeModal('modal-report-filter')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-[#94a3b8] border border-[#334155] hover:bg-[#334155]">Cancelar</button>
+          <button type="button" onclick="confirmarGerarPdfSetores()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors shadow-sm">Gerar PDF</button>
+          <button type="button" onclick="closeModal('modal-report-filter')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-[#94a3b8] border border-slate-200 dark:border-[#334155] hover:bg-slate-50 dark:hover:bg-[#334155]">Cancelar</button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="toast" class="fixed bottom-6 right-6 bg-[#1e293b] border border-[#334155] px-5 py-3 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-300 z-50 max-w-sm">
-    <span id="toast-msg" class="text-sm text-white">Operação realizada com sucesso!</span>
+  <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white border border-slate-800 px-5 py-3 rounded-lg shadow-2xl translate-y-20 opacity-0 transition-all duration-300 z-50 max-w-sm">
+    <span id="toast-msg" class="text-sm">Operação realizada com sucesso!</span>
   </div>
 
 <script>
@@ -123,6 +139,27 @@ let chartInstance1 = null;
 let chartInstanceRep1 = null;
 let chartInstanceRep2 = null;
 let chartInstanceRep3 = null;
+
+// Função para alternar o tema do site
+function toggleTheme() {
+  const htmlEl = document.documentElement;
+  if (htmlEl.classList.contains('dark')) {
+    htmlEl.classList.remove('dark');
+    htmlEl.classList.add('light');
+    localStorage.setItem('theme', 'light');
+  } else {
+    htmlEl.classList.remove('light');
+    htmlEl.classList.add('dark');
+    localStorage.setItem('theme', 'dark');
+  }
+}
+
+// Carregar tema salvo anteriormente
+(function() {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  document.documentElement.classList.remove('light', 'dark');
+  document.documentElement.classList.add(savedTheme);
+})();
 
 function toggleSidebar(e) {
   if (e) e.stopPropagation();
@@ -325,10 +362,10 @@ async function checkDbStatus(){
     const r = await fetch(`${API_BASE}/api/health/check`);
     const data = await r.json();
     if(r.ok && data.status==='ok'){
-      el.innerHTML = '<span class="w-2 h-2 rounded-full bg-[#10b981]"></span> Neon conectado';
+      el.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Conectado'; // Removida a palavra Neon
     } else { throw new Error(); }
   }catch(err){
-    el.innerHTML = '<span class="w-2 h-2 rounded-full bg-[#ef4444]"></span> Sem conexão';
+    el.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Sem conexão';
   }
 }
 
@@ -486,30 +523,30 @@ function buildLayout(){
         <div class="flex-shrink-0 mb-4">
           <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
             <div>
-              <h2 class="text-2xl font-bold text-white mb-1">${e.plural}</h2>
-              <p class="text-[#94a3b8] text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
+              <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-1">${e.plural}</h2>
+              <p class="text-slate-500 dark:text-[#94a3b8] text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
             </div>
-            ${(!isPublicView || (e.key === 'contagem')) ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+            ${(!isPublicView || (e.key === 'contagem')) ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
               Novo ${e.label}
-            </button>` : `<button onclick="openEntityModal('evento')" class="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">Novo Evento</button>`) : ''}
+            </button>` : `<button onclick="openEntityModal('evento')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">Novo Evento</button>`) : ''}
           </div>
           <div class="flex items-center gap-3 flex-wrap">
             <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
-              class="w-full sm:w-72 bg-[#1e293b] border border-[#334155] rounded-lg px-4 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+              class="w-full sm:w-72 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-lg px-4 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-[#64748b] focus:outline-none focus:border-blue-500 shadow-sm">
           </div>
         </div>
-        <div class="flex-1 bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden flex flex-col min-h-0 mb-6">
+        <div class="flex-1 bg-white dark:bg-[#1e293b] rounded-xl border border-slate-200 dark:border-[#334155] overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
           <div class="flex-1 overflow-y-auto relative pb-16">
             <table class="w-full text-sm border-collapse">
-              <thead class="sticky top-0 z-20 bg-[#0f172a]">
-                <tr class="text-left text-xs text-[#94a3b8] uppercase tracking-wider border-b border-[#334155]">
-                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView || (e.key === 'contagem' && !isPublicView) ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-[#0f172a]">${h}</th>`).join('')}
+              <thead class="sticky top-0 z-20 bg-slate-50 dark:bg-[#0f172a]">
+                <tr class="text-left text-xs text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider border-b border-slate-200 dark:border-[#334155]">
+                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView || (e.key === 'contagem' && !isPublicView) ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">${h}</th>`).join('')}
                 </tr>
               </thead>
               <tbody id="tabela-${e.key}"></tbody>
             </table>
-            <div id="empty-${e.key}" class="hidden text-center text-[#64748b] text-sm py-12"></div>
+            <div id="empty-${e.key}" class="hidden text-center text-slate-400 dark:text-[#64748b] text-sm py-12"></div>
           </div>
         </div>
       </div>
@@ -591,18 +628,18 @@ function renderDashboard(){
 
   let contagensPorSetorHtml = setores.map(s => {
     const qtSetor = contagensFiltradas.filter(c => c.codsetor == s.codsetor).reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
-    return `<div class="flex justify-between items-center py-2 border-b border-[#334155]/50 text-sm">
-      <span class="text-[#cbd5e1]">${escapeHtml(s.descricao)}</span>
-      <span class="font-mono font-semibold text-[#3b82f6]">${qtSetor}</span>
+    return `<div class="flex justify-between items-center py-2 border-b border-slate-100 dark:border-[#334155]/50 text-sm">
+      <span class="text-slate-700 dark:text-[#cbd5e1]">${escapeHtml(s.descricao)}</span>
+      <span class="font-mono font-semibold text-blue-600 dark:text-[#3b82f6]">${qtSetor}</span>
     </div>`;
-  }).join('') || '<p class="text-xs text-[#64748b]">Nenhum setor cadastrado para este evento.</p>';
+  }).join('') || '<p class="text-xs text-slate-400 dark:text-[#64748b]">Nenhum setor cadastrado para este evento.</p>';
 
   const setoresComContagemNoDia = new Set(contagensFiltradas.filter(c => Number(c.quantidade) > 0).map(c => c.codsetor));
   const setoresPendentes = setores.filter(s => !setoresComContagemNoDia.has(s.codsetor));
 
   let setoresPendentesHtml = setoresPendentes.length > 0 
-    ? setoresPendentes.map(s => `<span class="inline-block bg-[#ef4444]/10 text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5">${escapeHtml(s.descricao)}</span>`).join('')
-    : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta seleção!</p>';
+    ? setoresPendentes.map(s => `<span class="inline-block bg-red-50 dark:bg-[#ef4444]/10 text-red-600 dark:text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5 border border-red-100 dark:border-transparent">${escapeHtml(s.descricao)}</span>`).join('')
+    : '<p class="text-xs text-emerald-600 dark:text-[#10b981] font-medium">Todos os setores já informaram contagem nesta seleção!</p>';
 
   const periodosIdsParametros = new Set(parametros.map(p => String(p.codperiodo)));
   const periodosParametros = periodos.filter(p => periodosIdsParametros.has(String(p.codperiodo)));
@@ -612,67 +649,67 @@ function renderDashboard(){
   tabHome.innerHTML = `
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h2 class="text-2xl font-bold text-white mb-1">Dashboard do Evento</h2>
-        <p class="text-[#94a3b8] text-sm">Resumo estatístico e contagens por data e período cadastrado</p>
+        <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-1">Dashboard do Evento</h2>
+        <p class="text-slate-500 dark:text-[#94a3b8] text-sm">Resumo estatístico e contagens por data e período cadastrado</p>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
-          <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
-          <select id="dashboard-date-filter" onchange="changeDashboardDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-[#1e293b] px-3 py-2 rounded-lg border border-slate-200 dark:border-[#334155] shadow-sm">
+          <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium">Data:</span>
+          <select id="dashboard-date-filter" onchange="changeDashboardDate(this.value)" class="bg-slate-50 dark:bg-[#0f172a] text-sm font-semibold text-blue-600 dark:text-[#3b82f6] px-2 py-1 rounded border border-slate-200 dark:border-[#334155] focus:outline-none cursor-pointer">
             <option value="ALL">Todas as Datas</option>
           </select>
         </div>
-        <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
-          <span class="text-xs text-[#94a3b8] font-medium">Período:</span>
-          <select id="dashboard-periodo-filter" onchange="changeDashboardPeriodo(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-[#1e293b] px-3 py-2 rounded-lg border border-slate-200 dark:border-[#334155] shadow-sm">
+          <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium">Período:</span>
+          <select id="dashboard-periodo-filter" onchange="changeDashboardPeriodo(this.value)" class="bg-slate-50 dark:bg-[#0f172a] text-sm font-semibold text-blue-600 dark:text-[#3b82f6] px-2 py-1 rounded border border-slate-200 dark:border-[#334155] focus:outline-none cursor-pointer">
             ${periodoOptionsHtml}
           </select>
         </div>
       </div>
     </div>
 
-    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
-      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
+    <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 mb-6 shadow-sm">
+      <h3 class="text-sm font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
       <div class="relative w-full h-[300px]">
         <canvas id="chartCanvas1"></canvas>
       </div>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
-        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Setores</p>
-        <p class="text-3xl font-bold text-white">${setores.length}</p>
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-slate-400 dark:text-[#94a3b8] uppercase tracking-wider mb-1">Setores</p>
+        <p class="text-3xl font-bold text-slate-900 dark:text-white">${setores.length}</p>
       </div>
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
-        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Congregações</p>
-        <p class="text-3xl font-bold text-white">${congs.length}</p>
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-slate-400 dark:text-[#94a3b8] uppercase tracking-wider mb-1">Congregações</p>
+        <p class="text-3xl font-bold text-slate-900 dark:text-white">${congs.length}</p>
       </div>
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
-        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Pessoas</p>
-        <p class="text-3xl font-bold text-white">${pessoas.length}</p>
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-slate-400 dark:text-[#94a3b8] uppercase tracking-wider mb-1">Pessoas</p>
+        <p class="text-3xl font-bold text-slate-900 dark:text-white">${pessoas.length}</p>
       </div>
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
-        <p class="text-xs font-medium text-[#94a3b8] uppercase tracking-wider mb-1">Escalas</p>
-        <p class="text-3xl font-bold text-white">${escalas.length}</p>
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-5 shadow-sm">
+        <p class="text-xs font-medium text-slate-400 dark:text-[#94a3b8] uppercase tracking-wider mb-1">Escalas</p>
+        <p class="text-3xl font-bold text-slate-900 dark:text-white">${escalas.length}</p>
       </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6">
-        <h3 class="text-base font-bold text-white mb-4 flex items-center justify-between">
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 shadow-sm">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
           <span>Contagem por Setor (Filtro Atual)</span>
-          <span class="text-xs font-normal text-[#3b82f6] bg-[#3b82f6]/10 px-2 py-1 rounded">Total: ${totalQuantidade}</span>
+          <span class="text-xs font-normal text-blue-600 dark:text-[#3b82f6] bg-blue-50 dark:bg-[#3b82f6]/10 px-2 py-1 rounded">Total: ${totalQuantidade}</span>
         </h3>
         <div class="max-h-64 overflow-y-auto pr-1">
           ${contagensPorSetorHtml}
         </div>
       </div>
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 flex flex-col justify-between">
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 flex flex-col justify-between shadow-sm">
         <div>
-          <h3 class="text-base font-bold text-white mb-2">Setores Pendentes de Contagem</h3>
-          <p class="text-sm text-[#94a3b8] mb-4">Setores que ainda não informaram a contagem no filtro selecionado:</p>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white mb-2">Setores Pendentes de Contagem</h3>
+          <p class="text-sm text-slate-500 dark:text-[#94a3b8] mb-4">Setores que ainda não informaram a contagem no filtro selecionado:</p>
         </div>
-        <div class="bg-[#0f172a] p-4 rounded-lg border border-[#334155] min-h-[100px]">
+        <div class="bg-slate-50 dark:bg-[#0f172a] p-4 rounded-lg border border-slate-200 dark:border-[#334155] min-h-[100px]">
           ${setoresPendentesHtml}
         </div>
       </div>
@@ -691,12 +728,13 @@ function renderDashboardChart(contagens, periodosParametros){
   const ctx1 = document.getElementById('chartCanvas1');
   if(!ctx1) return;
 
+  const isDark = document.documentElement.classList.contains('dark');
   const diasUnicos = dashboardDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data.split('T')[0]))].sort() : [dashboardDataFilter];
   
   const labels1 = [];
   const dataValues1 = [];
   const backgroundColors1 = [];
-  const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
+  const palette = ['#0284c7', '#2563eb', '#059669', '#d97706', '#db2777', '#7c3aed', '#ea580c', '#9333ea', '#0d9488', '#4f46e5'];
 
   diasUnicos.forEach((dia, idx) => {
     periodosParametros.forEach((per, pIdx) => {
@@ -722,9 +760,9 @@ function renderDashboardChart(contagens, periodosParametros){
       datasets: [{
         label: 'Quantidade de Contagem',
         data: dataValues1.length > 0 ? dataValues1 : [0],
-        backgroundColor: backgroundColors1.length > 0 ? backgroundColors1 : ['#3b82f6'],
+        backgroundColor: backgroundColors1.length > 0 ? backgroundColors1 : ['#2563eb'],
         borderWidth: 1,
-        borderColor: '#334155',
+        borderColor: isDark ? '#334155' : '#cbd5e1',
         borderRadius: 6,
         barPercentage: 0.7,
       }]
@@ -735,10 +773,10 @@ function renderDashboardChart(contagens, periodosParametros){
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1e293b',
+          backgroundColor: isDark ? '#1e293b' : '#0f172a',
           titleColor: '#ffffff',
           bodyColor: '#cbd5e1',
-          borderColor: '#334155',
+          borderColor: isDark ? '#334155' : '#334155',
           borderWidth: 1,
           padding: 10,
           displayColors: false
@@ -746,13 +784,13 @@ function renderDashboardChart(contagens, periodosParametros){
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.3)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' } }
         },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(51, 65, 85, 0.4)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' } }
         }
       }
     }
@@ -777,77 +815,77 @@ function renderRelatorios(){
 
   tabRep.innerHTML = `
     <div class="mb-6">
-      <h2 class="text-2xl font-bold text-white mb-1">Relatórios e Gráficos</h2>
-      <p class="text-[#94a3b8] text-sm">Geração dos cartões oficiais do congresso e gráficos analíticos</p>
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-1">Relatórios e Gráficos</h2>
+      <p class="text-slate-500 dark:text-[#94a3b8] text-sm">Geração dos cartões oficiais do congresso e gráficos analíticos</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 shadow-xl flex flex-col justify-between">
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 shadow-sm flex flex-col justify-between">
         <div>
-          <div class="w-12 h-12 rounded-lg bg-[#3b82f6]/10 text-[#3b82f6] flex items-center justify-center mb-4">
+          <div class="w-12 h-12 rounded-lg bg-blue-50 dark:bg-[#3b82f6]/10 text-blue-600 dark:text-[#3b82f6] flex items-center justify-center mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           </div>
-          <h3 class="text-lg font-bold text-white mb-2">CO-24-T - Setores</h3>
-          <p class="text-sm text-[#94a3b8] mb-6">Cartão de contagem da assistência do congresso contendo a relação completa de setores, número de assentos e os respectivos indicadores.</p>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">CO-24-T - Setores</h3>
+          <p class="text-sm text-slate-500 dark:text-[#94a3b8] mb-6">Cartão de contagem da assistência do congresso contendo a relação completa de setores, número de assentos e os respectivos indicadores.</p>
         </div>
-        <button onclick="abrirModalFiltroSetores()" class="w-full bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+        <button onclick="abrirModalFiltroSetores()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           CO-24-T - Setores (PDF)
         </button>
       </div>
 
-      <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 shadow-xl flex flex-col justify-between">
+      <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 shadow-sm flex flex-col justify-between">
         <div>
-          <div class="w-12 h-12 rounded-lg bg-[#10b981]/10 text-[#10b981] flex items-center justify-center mb-4">
+          <div class="w-12 h-12 rounded-lg bg-emerald-50 dark:bg-[#10b981]/10 text-emerald-600 dark:text-[#10b981] flex items-center justify-center mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           </div>
-          <h3 class="text-lg font-bold text-white mb-2">CO-24-T - Assistência</h3>
-          <p class="text-sm text-[#94a3b8] mb-6">Relatório de controle contendo as horas de contagem (Parâmetros) e a soma geral da assistência por dia.</p>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">CO-24-T - Assistência</h3>
+          <p class="text-sm text-slate-500 dark:text-[#94a3b8] mb-6">Relatório de controle contendo as horas de contagem (Parâmetros) e a soma geral da assistência por dia.</p>
         </div>
-        <button onclick="gerarPdfistencia()" class="w-full bg-[#10b981] hover:bg-[#059669] text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+        <button onclick="gerarPdfistencia()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           CO-24-T - Assistência (PDF)
         </button>
       </div>
     </div>
 
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-4 bg-[#1e293b] p-4 rounded-xl border border-[#334155]">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e293b] p-4 rounded-xl border border-slate-200 dark:border-[#334155] shadow-sm">
       <div>
-        <h3 class="text-base font-bold text-white">Análise Gráfica</h3>
-        <p class="text-xs text-[#94a3b8]">Estatísticas de volume de assistência</p>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Análise Gráfica</h3>
+        <p class="text-xs text-slate-500 dark:text-[#94a3b8]">Estatísticas de volume de assistência</p>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex items-center gap-2 bg-[#0f172a] px-3 py-2 rounded-lg border border-[#334155]">
-          <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
-          <select id="relatorio-date-filter" onchange="changeRelatorioDate(this.value)" class="bg-transparent text-sm font-semibold text-[#3b82f6] focus:outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-slate-50 dark:bg-[#0f172a] px-3 py-2 rounded-lg border border-slate-200 dark:border-[#334155]">
+          <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium">Data:</span>
+          <select id="relatorio-date-filter" onchange="changeRelatorioDate(this.value)" class="bg-transparent text-sm font-semibold text-blue-600 dark:text-[#3b82f6] focus:outline-none cursor-pointer">
             <option value="ALL">Todas as Datas</option>
           </select>
         </div>
-        <div class="flex items-center gap-2 bg-[#0f172a] px-3 py-2 rounded-lg border border-[#334155]">
-          <span class="text-xs text-[#94a3b8] font-medium">Período:</span>
-          <select id="relatorio-periodo-filter" onchange="changeRelatorioPeriodo(this.value)" class="bg-transparent text-sm font-semibold text-[#3b82f6] focus:outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-slate-50 dark:bg-[#0f172a] px-3 py-2 rounded-lg border border-slate-200 dark:border-[#334155]">
+          <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium">Período:</span>
+          <select id="relatorio-periodo-filter" onchange="changeRelatorioPeriodo(this.value)" class="bg-transparent text-sm font-semibold text-blue-600 dark:text-[#3b82f6] focus:outline-none cursor-pointer">
             ${periodoOptionsHtml}
           </select>
         </div>
       </div>
     </div>
 
-    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
-      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
+    <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 mb-6 shadow-sm">
+      <h3 class="text-sm font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider mb-3">Volume Total de Contagem por Data / Período</h3>
       <div class="relative w-full h-[300px]">
         <canvas id="chartCanvasRep1"></canvas>
       </div>
     </div>
 
-    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
-      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Quantidade da Contagem por Setor (por Data / Período)</h3>
+    <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 mb-6 shadow-sm">
+      <h3 class="text-sm font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider mb-3">Quantidade da Contagem por Setor (por Data / Período)</h3>
       <div class="relative w-full h-[380px]">
         <canvas id="chartCanvasRep2"></canvas>
       </div>
     </div>
 
-    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl pb-12">
-      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Comparativo: Contagem por Setor vs. Assentos Disponíveis (numass)</h3>
+    <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 mb-6 shadow-sm pb-12">
+      <h3 class="text-sm font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider mb-3">Comparativo: Contagem por Setor vs. Assentos Disponíveis (numass)</h3>
       <div class="relative w-full h-[380px]">
         <canvas id="chartCanvasRep3"></canvas>
       </div>
@@ -869,12 +907,13 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
   const ctx3 = document.getElementById('chartCanvasRep3');
   if(!ctx1 || !ctx2 || !ctx3) return;
 
+  const isDark = document.documentElement.classList.contains('dark');
   const diasUnicos = relatorioDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data.split('T')[0]))].sort() : [relatorioDataFilter];
   
   const labels1 = [];
   const dataValues1 = [];
   const backgroundColors1 = [];
-  const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
+  const palette = ['#0284c7', '#2563eb', '#059669', '#d97706', '#db2777', '#7c3aed', '#ea580c', '#9333ea', '#0d9488', '#4f46e5'];
 
   diasUnicos.forEach((dia, idx) => {
     periodosParametros.forEach((per, pIdx) => {
@@ -923,7 +962,7 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
       backgroundColor: color,
       borderRadius: 4,
       borderWidth: 1,
-      borderColor: '#334155'
+      borderColor: isDark ? '#334155' : '#cbd5e1'
     };
   });
 
@@ -952,9 +991,9 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
       datasets: [{
         label: 'Quantidade de Contagem',
         data: dataValues1.length > 0 ? dataValues1 : [0],
-        backgroundColor: backgroundColors1.length > 0 ? backgroundColors1 : ['#3b82f6'],
+        backgroundColor: backgroundColors1.length > 0 ? backgroundColors1 : ['#2563eb'],
         borderWidth: 1,
-        borderColor: '#334155',
+        borderColor: isDark ? '#334155' : '#cbd5e1',
         borderRadius: 6,
         barPercentage: 0.7,
       }]
@@ -965,10 +1004,10 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1e293b',
+          backgroundColor: isDark ? '#1e293b' : '#0f172a',
           titleColor: '#ffffff',
           bodyColor: '#cbd5e1',
-          borderColor: '#334155',
+          borderColor: isDark ? '#334155' : '#334155',
           borderWidth: 1,
           padding: 10,
           displayColors: false
@@ -976,13 +1015,13 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.3)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' } }
         },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(51, 65, 85, 0.4)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' } }
         }
       }
     }
@@ -992,7 +1031,7 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
     type: 'bar',
     data: {
       labels: labels2.length > 0 ? labels2 : ['Nenhum dado'],
-      datasets: datasets2.length > 0 ? datasets2 : [{ label: 'Nenhum setor', data: [0], backgroundColor: '#10b981' }]
+      datasets: datasets2.length > 0 ? datasets2 : [{ label: 'Nenhum setor', data: [0], backgroundColor: '#059669' }]
     },
     options: {
       responsive: true,
@@ -1001,13 +1040,13 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
         legend: { 
           display: true, 
           position: 'bottom',
-          labels: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
+          labels: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
         },
         tooltip: {
-          backgroundColor: '#1e293b',
+          backgroundColor: isDark ? '#1e293b' : '#0f172a',
           titleColor: '#ffffff',
           bodyColor: '#cbd5e1',
-          borderColor: '#334155',
+          borderColor: isDark ? '#334155' : '#334155',
           borderWidth: 1,
           padding: 10
         }
@@ -1015,14 +1054,14 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
       scales: {
         x: {
           stacked: false,
-          grid: { color: 'rgba(51, 65, 85, 0.3)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' } }
         },
         y: {
           stacked: false,
           beginAtZero: true,
-          grid: { color: 'rgba(51, 65, 85, 0.4)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, precision: 0 }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' }, precision: 0 }
         }
       }
     }
@@ -1036,18 +1075,18 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
         {
           label: 'Contagem (Filtro Atual)',
           data: dataContagemSetor,
-          backgroundColor: '#3b82f6',
+          backgroundColor: '#2563eb',
           borderRadius: 4,
           borderWidth: 1,
-          borderColor: '#334155'
+          borderColor: isDark ? '#334155' : '#cbd5e1'
         },
         {
           label: 'Assentos Disponíveis (numass)',
           data: dataAssentosSetor,
-          backgroundColor: '#10b981',
+          backgroundColor: '#059669',
           borderRadius: 4,
           borderWidth: 1,
-          borderColor: '#334155'
+          borderColor: isDark ? '#334155' : '#cbd5e1'
         }
       ]
     },
@@ -1058,26 +1097,26 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
         legend: { 
           display: true, 
           position: 'bottom',
-          labels: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
+          labels: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
         },
         tooltip: {
-          backgroundColor: '#1e293b',
+          backgroundColor: isDark ? '#1e293b' : '#0f172a',
           titleColor: '#ffffff',
           bodyColor: '#cbd5e1',
-          borderColor: '#334155',
+          borderColor: isDark ? '#334155' : '#334155',
           borderWidth: 1,
           padding: 10
         }
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.3)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' } }
         },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(51, 65, 85, 0.4)' },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, precision: 0 }
+          grid: { color: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' },
+          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11, family: 'Inter' }, precision: 0 }
         }
       }
     }
@@ -1240,14 +1279,14 @@ function gerarPdfistencia(){
 
         bodyRows.push([
           { text: pIdx === 0 ? diaLabel : '', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
-          { text: horaCont, alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+          { text: horaCont, alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f8fafc', margin: [0, 10, 0, 10] },
           { text: somaAssistencia > 0 ? String(somaAssistencia) : '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
         ]);
       });
     } else {
       bodyRows.push([
         { text: diaLabel, bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
-        { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+        { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f8fafc', margin: [0, 10, 0, 10] },
         { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
       ]);
     }
@@ -1256,7 +1295,7 @@ function gerarPdfistencia(){
   if(bodyRows.length === 0){
     bodyRows.push([
       { text: 'PRIMEIRO DIA', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
-      { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+      { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f8fafc', margin: [0, 10, 0, 10] },
       { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
     ]);
   }
@@ -1348,18 +1387,18 @@ function renderDesignacoes(){
     if(telefone){
       const cleanTel = telefone.replace(/\D/g, '');
       const waNum = cleanTel.startsWith('55') ? cleanTel : '55' + cleanTel;
-      telLink = `<a href="https://api.whatsapp.com/send?phone=${waNum}" target="_blank" class="text-[#10b981] hover:underline flex items-center gap-1.5 font-medium">
+      telLink = `<a href="https://api.whatsapp.com/send?phone=${waNum}" target="_blank" class="text-emerald-600 dark:text-[#10b981] hover:underline flex items-center gap-1.5 font-medium">
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
         ${escapeHtml(telefone)}
       </a>`;
     }
 
-    return `<tr class="hover:bg-[#334155]/30 transition-colors border-t border-[#334155]/60">
-      <td class="px-6 py-4 font-mono text-[#3b82f6]">${dataFmt}</td>
-      <td class="px-6 py-4 text-white font-medium">${nomePessoa}</td>
-      <td class="px-6 py-4 text-[#cbd5e1]">${nomeSetor}</td>
-      <td class="px-6 py-4 font-mono text-[#cbd5e1]">${horaInicio}</td>
-      <td class="px-6 py-4 font-mono text-[#cbd5e1]">${horaFim}</td>
+    return `<tr class="hover:bg-slate-50 dark:hover:bg-[#334155]/30 transition-colors border-t border-slate-100 dark:border-[#334155]/60">
+      <td class="px-6 py-4 font-mono text-blue-600 dark:text-[#3b82f6]">${dataFmt}</td>
+      <td class="px-6 py-4 text-slate-900 dark:text-white font-medium">${nomePessoa}</td>
+      <td class="px-6 py-4 text-slate-700 dark:text-[#cbd5e1]">${nomeSetor}</td>
+      <td class="px-6 py-4 font-mono text-slate-600 dark:text-[#cbd5e1]">${horaInicio}</td>
+      <td class="px-6 py-4 font-mono text-slate-600 dark:text-[#cbd5e1]">${horaFim}</td>
       <td class="px-6 py-4">${telLink}</td>
     </tr>`;
   }).join('');
@@ -1382,36 +1421,36 @@ function renderDesignacoes(){
     <div class="flex-shrink-0 mb-4">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 class="text-2xl font-bold text-white mb-1">Designações de Indicadores</h2>
-          <p class="text-[#94a3b8] text-sm">Escalas e contato direto via WhatsApp</p>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-1">Designações de Indicadores</h2>
+          <p class="text-slate-500 dark:text-[#94a3b8] text-sm">Escalas e contato direto via WhatsApp</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
-          <div class="flex items-center gap-2 bg-[#1e293b] px-3 py-2 rounded-lg border border-[#334155]">
-            <span class="text-xs text-[#94a3b8] font-medium">Data:</span>
-            <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-[#0f172a] text-sm font-semibold text-[#3b82f6] px-2 py-1 rounded border border-[#334155] focus:outline-none cursor-pointer">
+          <div class="flex items-center gap-2 bg-white dark:bg-[#1e293b] px-3 py-2 rounded-lg border border-slate-200 dark:border-[#334155] shadow-sm">
+            <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium">Data:</span>
+            <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-slate-50 dark:bg-[#0f172a] text-sm font-semibold text-blue-600 dark:text-[#3b82f6] px-2 py-1 rounded border border-slate-200 dark:border-[#334155] focus:outline-none cursor-pointer">
               ${dateOptionsHtml}
             </select>
           </div>
-          <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]">
+          <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-[#64748b] focus:outline-none focus:border-blue-500 shadow-sm">
         </div>
       </div>
     </div>
 
-    <div class="flex-1 bg-[#1e293b] rounded-xl border border-[#334155] overflow-hidden flex flex-col min-h-0 mb-6">
+    <div class="flex-1 bg-white dark:bg-[#1e293b] rounded-xl border border-slate-200 dark:border-[#334155] overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
       <div class="flex-1 overflow-y-auto relative pb-16">
         <table class="w-full text-sm border-collapse">
-          <thead class="sticky top-0 z-20 bg-[#0f172a]">
-            <tr class="text-left text-xs text-[#94a3b8] uppercase tracking-wider border-b border-[#334155]">
-              <th class="px-6 py-3 bg-[#0f172a]">Data</th>
-              <th class="px-6 py-3 bg-[#0f172a]">Pessoa</th>
-              <th class="px-6 py-3 bg-[#0f172a]">Setor</th>
-              <th class="px-6 py-3 bg-[#0f172a]">Início</th>
-              <th class="px-6 py-3 bg-[#0f172a]">Fim</th>
-              <th class="px-6 py-3 bg-[#0f172a]">Telefone (WhatsApp)</th>
+          <thead class="sticky top-0 z-20 bg-slate-50 dark:bg-[#0f172a]">
+            <tr class="text-left text-xs text-slate-500 dark:text-[#94a3b8] uppercase tracking-wider border-b border-slate-200 dark:border-[#334155]">
+              <th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">Data</th>
+              <th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">Pessoa</th>
+              <th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">Setor</th>
+              <th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">Início</th>
+              <th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">Fim</th>
+              <th class="px-6 py-3 bg-slate-50 dark:bg-[#0f172a]">Telefone (WhatsApp)</th>
             </tr>
           </thead>
           <tbody>
-            ${rowsHtml || `<tr><td colspan="6" class="text-center text-[#64748b] py-12">Nenhuma designação encontrada.</td></tr>`}
+            ${rowsHtml || `<tr><td colspan="6" class="text-center text-slate-400 dark:text-[#64748b] py-12">Nenhuma designação encontrada.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1434,14 +1473,14 @@ async function renderMapa(){
   let uploadSection = '';
   if (!isPublicView) {
     uploadSection = `
-      <div class="mb-6 bg-[#1e293b] border border-[#334155] rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0">
+      <div class="mb-6 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm">
         <div>
-          <h4 class="text-sm font-bold text-white mb-1">Atualizar Imagem do Mapa</h4>
-          <p class="text-xs text-[#94a3b8]">Selecione um arquivo de imagem (JPG ou PNG) do seu computador para definir o mapa deste evento.</p>
+          <h4 class="text-sm font-bold text-slate-900 dark:text-white mb-1">Atualizar Imagem do Mapa</h4>
+          <p class="text-xs text-slate-500 dark:text-[#94a3b8]">Selecione um arquivo de imagem (JPG ou PNG) do seu computador para definir o mapa deste evento.</p>
         </div>
         <div class="flex items-center gap-3">
-          <input type="file" id="map-file-input" accept="image/*" class="text-xs text-[#94a3b8] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#3b82f6] file:text-white hover:file:bg-[#2563eb] cursor-pointer">
-          <button onclick="salvarNovoMapa()" class="bg-[#10b981] hover:bg-[#059669] text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors">Salvar Imagem</button>
+          <input type="file" id="map-file-input" accept="image/*" class="text-xs text-slate-500 dark:text-[#94a3b8] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+          <button onclick="salvarNovoMapa()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">Salvar Imagem</button>
         </div>
       </div>
     `;
@@ -1449,23 +1488,23 @@ async function renderMapa(){
 
   let contentHtml = '';
   if(imgSrc){
-    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[70vh] w-auto max-w-full rounded border border-[#334155] shadow-md bg-white">`;
+    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[70vh] w-auto max-w-full rounded border border-slate-200 dark:border-[#334155] shadow-sm bg-white">`;
   } else {
     contentHtml = `
       <div class="text-center py-12">
-        <svg class="w-12 h-12 mx-auto text-[#64748b] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-        <p class="text-sm text-[#94a3b8] font-medium">Nenhum mapa cadastrado para este evento.</p>
-        <p class="text-xs text-[#64748b] mt-1">Utilize o botão acima para enviar a imagem do mapa.</p>
+        <svg class="w-12 h-12 mx-auto text-slate-400 dark:text-[#64748b] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <p class="text-sm text-slate-600 dark:text-[#94a3b8] font-medium">Nenhum mapa cadastrado para este evento.</p>
+        <p class="text-xs text-slate-400 dark:text-[#64748b] mt-1">Utilize o botão acima para enviar a imagem do mapa.</p>
       </div>`;
   }
 
   tabMapa.innerHTML = `
     <div class="flex-shrink-0 mb-4">
-      <h2 class="text-2xl font-bold text-white mb-1">Mapa do Evento</h2>
-      <p class="text-[#94a3b8] text-sm">Visualização detalhada do layout e setores do congresso</p>
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-1">Mapa do Evento</h2>
+      <p class="text-slate-500 dark:text-[#94a3b8] text-sm">Visualização detalhada do layout e setores do congresso</p>
     </div>
     ${uploadSection}
-    <div class="flex-1 bg-[#1e293b] border border-[#334155] rounded-xl p-6 flex justify-center items-center shadow-lg overflow-y-auto mb-6">
+    <div class="flex-1 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] rounded-xl p-6 flex justify-center items-center shadow-sm overflow-y-auto mb-6">
       ${contentHtml}
     </div>
   `;
@@ -1616,7 +1655,7 @@ function renderTable(key){
   if((db[key]||[]).length===0){
     tbody.innerHTML=''; tableEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
-    emptyEl.innerHTML = `Nenhum registro em <b class="text-white">${ent.plural}</b> ainda.`;
+    emptyEl.innerHTML = `Nenhum registro em <b class="text-slate-800 dark:text-white">${ent.plural}</b> ainda.`;
     return;
   }
   tableEl.classList.remove('hidden');
@@ -1632,12 +1671,12 @@ function renderTable(key){
     const tableFields = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group');
     const cells = tableFields.map(f=>{
       if(f.type==='fk'){
-        return `<td class="px-6 py-4 text-[#cbd5e1]">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-[#64748b] font-mono text-xs">#${r[f.name]}</span></td>`;
+        return `<td class="px-6 py-4 text-slate-700 dark:text-[#cbd5e1]">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-slate-400 dark:text-[#64748b] font-mono text-xs">#${r[f.name]}</span></td>`;
       }
       let val = r[f.name];
       if(f.type==='date') val = formatDateBR(val);
       if(f.name==='ativo') val = (val===true || val==='true') ? 'SIM' : 'NÃO';
-      return `<td class="px-6 py-4 text-[#cbd5e1]">${val!==undefined && val!==null && val!=='' ? escapeHtml(String(val)) : '—'}</td>`;
+      return `<td class="px-6 py-4 text-slate-700 dark:text-[#cbd5e1]">${val!==undefined && val!==null && val!=='' ? escapeHtml(String(val)) : '—'}</td>`;
     }).join('');
     
     let actionsCell = '';
@@ -1646,13 +1685,13 @@ function renderTable(key){
 
     if (showEdit || showDelete) {
       actionsCell = `<td class="px-6 py-4 whitespace-nowrap">
-        ${showEdit ? `<button onclick="openEntityModal('${key}', ${r[ent.pk]})" class="text-[#3b82f6] hover:text-[#60a5fa] text-xs font-medium mr-3">Editar</button>` : ''}
-        ${showDelete ? `<button onclick="deleteRecord('${key}', ${r[ent.pk]})" class="text-[#ef4444] hover:text-[#f87171] text-xs font-medium">Excluir</button>` : ''}
+        ${showEdit ? `<button onclick="openEntityModal('${key}', ${r[ent.pk]})" class="text-blue-600 dark:text-[#3b82f6] hover:text-blue-800 dark:hover:text-[#60a5fa] text-xs font-medium mr-3">Editar</button>` : ''}
+        ${showDelete ? `<button onclick="deleteRecord('${key}', ${r[ent.pk]})" class="text-red-500 hover:text-red-700 text-xs font-medium">Excluir</button>` : ''}
       </td>`;
     }
 
-    return `<tr class="hover:bg-[#334155]/30 transition-colors border-t border-[#334155]/60">
-      <td class="px-6 py-4 font-mono text-[#3b82f6]">${r[ent.pk]}</td>
+    return `<tr class="hover:bg-slate-50 dark:hover:bg-[#334155]/30 transition-colors border-t border-slate-100 dark:border-[#334155]/60">
+      <td class="px-6 py-4 font-mono text-blue-600 dark:text-[#3b82f6]">${r[ent.pk]}</td>
       ${cells}
       ${actionsCell}
     </tr>`;
@@ -1690,7 +1729,7 @@ function openEntityModal(key, id){
     }
 
     let control;
-    const base = "w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]";
+    const base = "w-full bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-[#64748b] focus:outline-none focus:border-blue-500 shadow-sm";
     
     if(f.type === 'checkbox_group'){
       let selectedTelas = [];
@@ -1701,10 +1740,10 @@ function openEntityModal(key, id){
           selectedTelas = String(record[f.name]).split(',').map(s => s.trim());
         }
       }
-      control = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#0f172a] border border-[#334155] rounded-lg p-3 max-h-48 overflow-y-auto">
+      control = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg p-3 max-h-48 overflow-y-auto">
         ${AVAILABLE_MENUS.map(m => `
-          <label class="flex items-center gap-2 text-xs text-[#cbd5e1] cursor-pointer hover:text-white">
-            <input type="checkbox" data-checkbox-group="${f.name}" value="${m.key}" ${selectedTelas.includes(m.key) ? 'checked' : ''} class="w-4 h-4 accent-[#3b82f6] rounded">
+          <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-[#cbd5e1] cursor-pointer hover:text-slate-900 dark:hover:text-white">
+            <input type="checkbox" data-checkbox-group="${f.name}" value="${m.key}" ${selectedTelas.includes(m.key) ? 'checked' : ''} class="w-4 h-4 accent-blue-600 dark:accent-[#3b82f6] rounded">
             ${m.label}
           </label>
         `).join('')}
@@ -1712,8 +1751,8 @@ function openEntityModal(key, id){
     } else if(f.name === 'ativo' && key === 'parametros'){
       const isChecked = record ? (record.ativo === true || record.ativo === 'true') : true;
       control = `<div class="flex items-center gap-3 pt-1">
-        <input type="checkbox" data-field="${f.name}" ${isChecked ? 'checked' : ''} class="w-5 h-5 accent-[#3b82f6] rounded cursor-pointer">
-        <span class="text-sm text-[#cbd5e1]">Liberado para contagens neste dia</span>
+        <input type="checkbox" data-field="${f.name}" ${isChecked ? 'checked' : ''} class="w-5 h-5 accent-blue-600 dark:accent-[#3b82f6] rounded cursor-pointer">
+        <span class="text-sm text-slate-700 dark:text-[#cbd5e1]">Liberado para contagens neste dia</span>
       </div>`;
     } else if(f.type==='fk'){
       const refEnt = entity(f.ref);
@@ -1739,7 +1778,7 @@ function openEntityModal(key, id){
       }).join('');
       
       if(f.fixedToGlobal && !ent.isGlobal){
-        control = `<select data-field="${f.name}" ${onChangeAttr} class="${base} bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
+        control = `<select data-field="${f.name}" ${onChangeAttr} class="${base} bg-slate-100 dark:bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
       } else {
         control = `<select data-field="${f.name}" ${onChangeAttr} class="${base}"><option value="">Selecione…</option>${opts}</select>`;
       }
@@ -1761,7 +1800,7 @@ function openEntityModal(key, id){
         control = `<input type="date" data-field="${f.name}" value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
       }
     } else if(f.type==='time'){
-      const readonlyAttr = f.readonly ? 'readonly style="background-color: #111827; color: #9ca3af; cursor: not-allowed;"' : '';
+      const readonlyAttr = f.readonly ? 'readonly style="background-color: var(--time-bg, #f1f5f9); color: #64748b; cursor: not-allowed;"' : '';
       control = `<input type="time" data-field="${f.name}" value="${val||''}" ${readonlyAttr} class="${base}">`;
     } else if(f.type==='number'){
       control = `<input type="number" data-field="${f.name}" value="${val!==undefined && val!==null ? val : ''}" placeholder="${f.placeholder||''}" class="${base}">`;
@@ -1771,9 +1810,9 @@ function openEntityModal(key, id){
       control = `<input type="text" data-field="${f.name}" value="${escapeHtml(val||'')}" placeholder="${f.placeholder||''}" class="${base}" oninput="this.value = this.value.toUpperCase()">`;
     }
     return `<div data-field-wrap="${f.name}">
-      <label class="block text-xs font-medium text-[#94a3b8] mb-1.5">${f.label}${f.required ? ' <span class="text-[#ef4444]">*</span>':''}</label>
+      <label class="block text-xs font-medium text-slate-600 dark:text-[#94a3b8] mb-1.5">${f.label}${f.required ? ' <span class="text-red-500">*</span>':''}</label>
       ${control}
-      <p class="err-msg hidden text-xs text-[#ef4444] mt-1 font-mono"></p>
+      <p class="err-msg hidden text-xs text-red-500 mt-1 font-mono"></p>
     </div>`;
   }).join('');
 
@@ -1890,7 +1929,6 @@ document.getElementById('entity-form').addEventListener('submit', async function
     }
   });
 
-  // Validação frontend de unicidade de telefone no cadastro/edição de pessoas
   if (key === 'pessoa' && values.telefone) {
     const telefoneDuplicado = (db['pessoa'] || []).some(p => p.telefone === values.telefone && (!editingId || p.codpessoa !== Number(editingId)));
     if (telefoneDuplicado) {
