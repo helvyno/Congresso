@@ -77,11 +77,11 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS pessoa (
         codpessoa SERIAL PRIMARY KEY,
         nomecompleto TEXT NOT NULL,
-        telefone TEXT,
-        codprivilegio INT REFERENCES privilegio(codprivilegio),
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        codcong INT REFERENCES congregacao(codcong),
-        codperfil INT REFERENCES perfil(codperfil)
+        telefone TEXT UNIQUE NOT NULL,
+        codprivilegio INT REFERENCES privilegio(codprivilegio) NOT NULL,
+        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE NOT NULL,
+        codcong INT REFERENCES congregacao(codcong) NOT NULL,
+        codperfil INT REFERENCES perfil(codperfil) NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS escalas (
@@ -166,11 +166,23 @@ entities.forEach(table => {
       if (keys.length === 0) {
         return res.status(400).json({ error: 'Nenhum dado fornecido.' });
       }
+
+      // Validação específica para garantir unicidade do telefone na tabela pessoa
+      if (table === 'pessoa' && req.body.telefone) {
+        const telCheck = await pool.query('SELECT codpessoa FROM pessoa WHERE telefone = $1', [req.body.telefone]);
+        if (telCheck.rows.length > 0) {
+          return res.status(400).json({ error: 'Este número de telefone já está cadastrado para outra pessoa.' });
+        }
+      }
+
       const indicators = keys.map((_, i) => `$${i + 1}`).join(', ');
       const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${indicators}) RETURNING *`;
       const result = await pool.query(query, values);
       res.status(201).json(result.rows[0]);
     } catch (err) {
+      if (err.code === '23505') {
+        return res.status(400).json({ error: 'Este número de telefone já está cadastrado.' });
+      }
       res.status(500).json({ error: err.message });
     }
   });
@@ -183,6 +195,15 @@ entities.forEach(table => {
       if (keys.length === 0) {
         return res.status(400).json({ error: 'Nenhum dado fornecido.' });
       }
+
+      // Validação específica de unicidade do telefone em edições de pessoa
+      if (table === 'pessoa' && req.body.telefone) {
+        const telCheck = await pool.query('SELECT codpessoa FROM pessoa WHERE telefone = $1 AND codpessoa != $2', [req.body.telefone, id]);
+        if (telCheck.rows.length > 0) {
+          return res.status(400).json({ error: 'Este número de telefone já pertence a outra pessoa cadastrada.' });
+        }
+      }
+
       const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
       values.push(id);
       const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${values.length} RETURNING *`;
@@ -192,6 +213,9 @@ entities.forEach(table => {
       }
       res.json(result.rows[0]);
     } catch (err) {
+      if (err.code === '23505') {
+        return res.status(400).json({ error: 'Este número de telefone já está cadastrado.' });
+      }
       res.status(500).json({ error: err.message });
     }
   });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DATASABE - Sistema de Designação de Indicadores</title>
+<title>GESTÃO DE INDICADORES - DATASABE Sistemas</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
@@ -36,8 +36,8 @@
       </button>
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-lg border border-[#334155] bg-white">
       <div>
-        <h1 class="text-lg font-bold text-white tracking-tight">DATASABE</h1>
-        <p class="text-xs text-[#94a3b8] hidden sm:block">Sistema de Designação de Indicadores</p>
+        <h1 class="text-lg font-bold text-white tracking-tight">Gestão de Indicadores</h1>
+        <p class="text-xs text-[#94a3b8] hidden sm:block">DATASABE Sistemas</p>
       </div>
     </div>
 
@@ -211,7 +211,7 @@ const ENTITIES = [
     {name:'horario_final', label:'Horário Final', type:'time', required:true}
   ]},
   { key:'perfil', label:'Perfil', plural:'Perfis', pk:'codperfil', display:r=>r.descricao, isGlobal:true, fields:[
-    {name:'descricao', label:'Descrição do Perfil', type:'text', required:true, placeholder:'Ex.: Administrador'},
+    {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: Administrador'},
     {name:'permissoes', label:'Lista de Telas', type:'checkbox_group', required:false}
   ]},
   { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
@@ -223,9 +223,9 @@ const ENTITIES = [
   ]},
   { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', display:r=>r.nomecompleto, fields:[
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
-    {name:'telefone', label:'Telefone (11 números, ex: 34988887777)', type:'phone', required:false, placeholder:'34988887777'},
+    {name:'telefone', label:'Telefone (11 números, ex: 34988887777)', type:'phone', required:true, placeholder:'34988887777'},
     {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
-    {name:'codperfil', label:'Perfil', type:'fk', ref:'perfil', required:false},
+    {name:'codperfil', label:'Perfil', type:'fk', ref:'perfil', required:true, defaultToIndicador:true},
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true, filterByEvent:true, sortAlphabetically:true}
   ]},
@@ -1677,6 +1677,14 @@ function openEntityModal(key, id){
       val = globalEventoId;
     }
 
+    if(!record && f.defaultToIndicador && !val){
+      const perfis = db['perfil'] || [];
+      const perfilIndicador = perfis.find(p => (p.descricao || '').trim().toUpperCase() === 'INDICADOR');
+      if(perfilIndicador){
+        val = perfilIndicador.codperfil;
+      }
+    }
+
     if(!record && f.type === 'date' && (key === 'contagem' || key === 'escalas')) {
       val = '';
     }
@@ -1881,6 +1889,25 @@ document.getElementById('entity-form').addEventListener('submit', async function
       values[f.name] = (f.name === 'email') ? (raw ? raw.trim().toLowerCase() : null) : (raw ? raw.trim().toUpperCase() : null); 
     }
   });
+
+  // Validação frontend de unicidade de telefone no cadastro/edição de pessoas
+  if (key === 'pessoa' && values.telefone) {
+    const telefoneDuplicado = (db['pessoa'] || []).some(p => p.telefone === values.telefone && (!editingId || p.codpessoa !== Number(editingId)));
+    if (telefoneDuplicado) {
+      const phoneWrap = form.querySelector('[data-field-wrap="telefone"]');
+      if (phoneWrap) {
+        const phoneEl = phoneWrap.querySelector('[data-field="telefone"]');
+        const phoneErr = phoneWrap.querySelector('.err-msg');
+        if (phoneEl) phoneEl.classList.add('field-error');
+        if (phoneErr) {
+          phoneErr.textContent = 'Este número de telefone já está cadastrado para outra pessoa.';
+          phoneErr.classList.remove('hidden');
+        }
+      }
+      showToast('Este número de telefone já está cadastrado.');
+      hasError = true;
+    }
+  }
 
   if(hasError){ showToast('Corrija os campos destacados.'); return; }
 
