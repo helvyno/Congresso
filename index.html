@@ -137,12 +137,12 @@ const ENTITIES = [
   ]},
   { key:'setor', label:'Setor', plural:'Setores', pk:'codsetor', display:r=>r.descricao, fields:[
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Portaria Principal'},
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'numass', label:'NÚMERO DE ASSENTOS', type:'number', required:false, placeholder:'Ex.: 150'}
   ]},
   { key:'congregacao', label:'Congregação', plural:'Congregações', pk:'codcong', display:r=>r.nome_congregacao, fields:[ 
     {name:'nome_congregacao', label:'Nome da congregação', type:'text', required:true, placeholder:'Ex.: CENTRAL'},
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true}
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true}
   ]},
   { key:'privilegio', label:'Privilégio', plural:'Privilégios', pk:'codprivilegio', display:r=>r.descricao, isGlobal:true, fields:[ 
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Coordenador de setor'} 
@@ -151,7 +151,7 @@ const ENTITIES = [
     {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'}
   ]},
   { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'datacont', label:'Data da Contagem', type:'date', required:true, limitToEvent:true},
     {name:'horacont', label:'Hora da Contagem', type:'time', required:false},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
@@ -161,11 +161,11 @@ const ENTITIES = [
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
     {name:'telefone', label:'Telefone', type:'text', required:false, placeholder:'(34) 90000-0000'},
     {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true}
   ]},
   { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true, searchable:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
@@ -173,7 +173,7 @@ const ENTITIES = [
     {name:'hora_fim', label:'Hora fim', type:'time', required:true}
   ]},
   { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', display:r=>String(r.quantidade), fields:[
-    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
@@ -409,6 +409,9 @@ function buildLayout(){
     if(e.isCustomMap){
       return `<div id="tab-mapa" class="tab-content overflow-y-auto ${current==='mapa'?'active':''}"></div>`;
     }
+
+    const tableFields = e.fields.filter(f => !f.hiddenInTable);
+
     return `
       <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
         <div class="flex-shrink-0 mb-4">
@@ -432,7 +435,7 @@ function buildLayout(){
             <table class="w-full text-sm border-collapse">
               <thead class="sticky top-0 z-20 bg-[#0f172a]">
                 <tr class="text-left text-xs text-[#94a3b8] uppercase tracking-wider border-b border-[#334155]">
-                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...e.fields.map(f=>f.label), (!isPublicView || (e.key === 'contagem' && !isPublicView) ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-[#0f172a]">${h}</th>`).join('')}
+                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView || (e.key === 'contagem' && !isPublicView) ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-[#0f172a]">${h}</th>`).join('')}
                 </tr>
               </thead>
               <tbody id="tabela-${e.key}"></tbody>
@@ -935,7 +938,6 @@ function gerarPdfSetores(){
   const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
   const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
 
-  // Mapeia TODOS os setores cadastrados sem limitar a 15
   const cleanRows = setores.map((setor, i) => {
     const setorNome = setor ? setor.descricao : '';
     const numAss = setor && setor.numass ? String(setor.numass) : '';
@@ -1002,7 +1004,6 @@ function gerarPdfistencia(){
   const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
 
-  // Ordenar parâmetros por data
   parametros.sort((a, b) => (a.datacont || '').localeCompare(b.datacont || ''));
 
   const diasUnicos = [...new Set(parametros.map(p => p.datacont))];
@@ -1016,8 +1017,6 @@ function gerarPdfistencia(){
 
     paramsDoDia.forEach((param, pIdx) => {
       const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
-      
-      // Soma da assistência de todos os setores para este dia e período/parâmetro
       const contsDoParam = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(param.codperiodo));
       const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
 
@@ -1308,7 +1307,7 @@ function renderTable(key){
   if(ent._search){
     const q = ent._search;
     rows = rows.filter(r=>{
-      return ent.fields.some(f=>{
+      return ent.fields.filter(f => !f.hiddenInTable).some(f=>{
         let v = f.type==='fk' ? refLabel(f.ref, r[f.name]) : r[f.name];
         if(f.type==='date') v = formatDateBR(v);
         return String(v||'').toLowerCase().includes(q);
@@ -1333,7 +1332,8 @@ function renderTable(key){
   emptyEl.classList.add('hidden');
 
   tbody.innerHTML = rows.map(r=>{
-    const cells = ent.fields.map(f=>{
+    const tableFields = ent.fields.filter(f => !f.hiddenInTable);
+    const cells = tableFields.map(f=>{
       if(f.type==='fk'){
         return `<td class="px-6 py-4 text-[#cbd5e1]">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-[#64748b] font-mono text-xs">#${r[f.name]}</span></td>`;
       }
