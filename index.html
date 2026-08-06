@@ -155,6 +155,7 @@ const ICONS = {
   congregacao: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"></path>',
   privilegio: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-2a9 9 0 11-18 0c0-1.657.507-3.195 1.374-4.468M12 3c2.5 0 4.847.99 6.573 2.75"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"></path>',
   periodo: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>',
+  perfil: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>',
   pessoa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>',
   escalas: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
   designacoes: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
@@ -163,6 +164,24 @@ const ICONS = {
   parametros: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>',
   mapa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>'
 };
+
+const AVAILABLE_MENUS = [
+  { key: 'Dashboard', label: 'Dashboard' },
+  { key: 'Relatórios', label: 'Relatórios' },
+  { key: 'Designações', label: 'Designações' },
+  { key: 'Mapa do Evento', label: 'Mapa do Evento' },
+  { key: 'Eventos', label: 'Eventos' },
+  { key: 'Setores', label: 'Setores' },
+  { key: 'Congregações', label: 'Congregações' },
+  { key: 'Privilégios', label: 'Privilégios' },
+  { key: 'Períodos', label: 'Períodos' },
+  { key: 'Parâmetros', label: 'Parâmetros' },
+  { key: 'Perfis', label: 'Perfis' },
+  { key: 'Pessoas', label: 'Pessoas' },
+  { key: 'Escalas', label: 'Escalas' },
+  { key: 'Contagens', label: 'Contagens' },
+  { key: 'Usuários', label: 'Usuários' }
+];
 
 const ENTITIES = [
   { key:'home', label:'Início', plural:'Dashboard', isHome:true },
@@ -191,6 +210,10 @@ const ENTITIES = [
     {name:'horario_inicial', label:'Horário Inicial', type:'time', required:true},
     {name:'horario_final', label:'Horário Final', type:'time', required:true}
   ]},
+  { key:'perfil', label:'Perfil', plural:'Perfis', pk:'codperfil', display:r=>r.descricao, isGlobal:true, fields:[
+    {name:'descricao', label:'Descrição do Perfil', type:'text', required:true, placeholder:'Ex.: Administrador'},
+    {name:'permissoes', label:'Lista de Telas', type:'checkbox_group', required:false}
+  ]},
   { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'datacont', label:'Data da Contagem', type:'date', required:true, limitToEvent:true},
@@ -200,10 +223,11 @@ const ENTITIES = [
   ]},
   { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', display:r=>r.nomecompleto, fields:[
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
-    {name:'telefone', label:'Telefone', type:'text', required:false, placeholder:'(34) 90000-0000'},
+    {name:'telefone', label:'Telefone (11 números, ex: 34988887777)', type:'phone', required:false, placeholder:'34988887777'},
     {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
+    {name:'codperfil', label:'Perfil', type:'fk', ref:'perfil', required:false},
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
-    {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true}
+    {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true, filterByEvent:true, sortAlphabetically:true}
   ]},
   { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
@@ -455,7 +479,7 @@ function buildLayout(){
       return `<div id="tab-mapa" class="tab-content overflow-y-auto ${current==='mapa'?'active':''}"></div>`;
     }
 
-    const tableFields = e.fields.filter(f => !f.hiddenInTable);
+    const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group');
 
     return `
       <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
@@ -903,7 +927,6 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
     };
   });
 
-  // Dados para o Terceiro Gráfico: Comparativo Setor (Contagem Filtrada vs numass)
   let contagensFiltradas3 = contagens;
   if (relatorioDataFilter !== 'ALL') {
     contagensFiltradas3 = contagensFiltradas3.filter(ct => ct.data.split('T')[0] === relatorioDataFilter);
@@ -1426,7 +1449,6 @@ async function renderMapa(){
 
   let contentHtml = '';
   if(imgSrc){
-    // Ajuste em object-contain e max-h-[70vh] para visualização perfeita em tablets, notebooks e celulares sem cortes
     contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[70vh] w-auto max-w-full rounded border border-[#334155] shadow-md bg-white">`;
   } else {
     contentHtml = `
@@ -1563,7 +1585,6 @@ function renderTable(key){
     });
   }
 
-  // Ordenação específica para a tela de Congregações: por Nome da Congregação
   if (key === 'congregacao') {
     rows.sort((a, b) => {
       const nomeA = (a.nome_congregacao || '').toLowerCase();
@@ -1572,10 +1593,18 @@ function renderTable(key){
     });
   }
 
+  if (key === 'perfil') {
+    rows.sort((a, b) => {
+      const nomeA = (a.descricao || '').toLowerCase();
+      const nomeB = (b.descricao || '').toLowerCase();
+      return nomeA.localeCompare(nomeB);
+    });
+  }
+
   if(ent._search){
     const q = ent._search;
     rows = rows.filter(r=>{
-      return ent.fields.filter(f => !f.hiddenInTable).some(f=>{
+      return ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group').some(f=>{
         let v = f.type==='fk' ? refLabel(f.ref, r[f.name]) : r[f.name];
         if(f.type==='date') v = formatDateBR(v);
         return String(v||'').toLowerCase().includes(q);
@@ -1600,7 +1629,7 @@ function renderTable(key){
   emptyEl.classList.add('hidden');
 
   tbody.innerHTML = rows.map(r=>{
-    const tableFields = ent.fields.filter(f => !f.hiddenInTable);
+    const tableFields = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group');
     const cells = tableFields.map(f=>{
       if(f.type==='fk'){
         return `<td class="px-6 py-4 text-[#cbd5e1]">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-[#64748b] font-mono text-xs">#${r[f.name]}</span></td>`;
@@ -1655,7 +1684,24 @@ function openEntityModal(key, id){
     let control;
     const base = "w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]";
     
-    if(f.name === 'ativo' && key === 'parametros'){
+    if(f.type === 'checkbox_group'){
+      let selectedTelas = [];
+      if(record && record[f.name]){
+        try {
+          selectedTelas = JSON.parse(record[f.name]);
+        } catch(e) {
+          selectedTelas = String(record[f.name]).split(',').map(s => s.trim());
+        }
+      }
+      control = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#0f172a] border border-[#334155] rounded-lg p-3 max-h-48 overflow-y-auto">
+        ${AVAILABLE_MENUS.map(m => `
+          <label class="flex items-center gap-2 text-xs text-[#cbd5e1] cursor-pointer hover:text-white">
+            <input type="checkbox" data-checkbox-group="${f.name}" value="${m.key}" ${selectedTelas.includes(m.key) ? 'checked' : ''} class="w-4 h-4 accent-[#3b82f6] rounded">
+            ${m.label}
+          </label>
+        `).join('')}
+      </div>`;
+    } else if(f.name === 'ativo' && key === 'parametros'){
       const isChecked = record ? (record.ativo === true || record.ativo === 'true') : true;
       control = `<div class="flex items-center gap-3 pt-1">
         <input type="checkbox" data-field="${f.name}" ${isChecked ? 'checked' : ''} class="w-5 h-5 accent-[#3b82f6] rounded cursor-pointer">
@@ -1666,6 +1712,16 @@ function openEntityModal(key, id){
       let refList = db[f.ref] || [];
       if(!refEnt.isGlobal && f.fixedToGlobal && globalEventoId){
         refList = refList.filter(r => r.codevento == globalEventoId);
+      }
+      if (f.filterByEvent && globalEventoId) {
+        refList = refList.filter(r => r.codevento == globalEventoId);
+      }
+      if (f.sortAlphabetically) {
+        refList = [...refList].sort((a, b) => {
+          const nameA = refEnt.display(a).toLowerCase();
+          const nameB = refEnt.display(b).toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
       }
 
       const onChangeAttr = f.onPeriodChange ? 'onchange="onEscalaPeriodoChange(this.value)"' : '';
@@ -1701,6 +1757,8 @@ function openEntityModal(key, id){
       control = `<input type="time" data-field="${f.name}" value="${val||''}" ${readonlyAttr} class="${base}">`;
     } else if(f.type==='number'){
       control = `<input type="number" data-field="${f.name}" value="${val!==undefined && val!==null ? val : ''}" placeholder="${f.placeholder||''}" class="${base}">`;
+    } else if(f.type==='phone'){
+      control = `<input type="text" data-field="${f.name}" maxlength="11" value="${escapeHtml(val||'')}" placeholder="${f.placeholder||'34988887777'}" class="${base}" oninput="this.value = this.value.replace(/\\D/g, '').slice(0, 11)">`;
     } else {
       control = `<input type="text" data-field="${f.name}" value="${escapeHtml(val||'')}" placeholder="${f.placeholder||''}" class="${base}" oninput="this.value = this.value.toUpperCase()">`;
     }
@@ -1747,10 +1805,19 @@ document.getElementById('entity-form').addEventListener('submit', async function
   const eventoObj = (db['evento']||[]).find(e => Number(e.codevento) === Number(globalEventoId));
 
   ent.fields.forEach(f=>{
+    const wrap = form.querySelector(`[data-field-wrap="${f.name}"]`);
+    if(!wrap) return;
+    const err = wrap.querySelector('.err-msg');
+    
+    if(f.type === 'checkbox_group'){
+      const checkedBoxes = form.querySelectorAll(`[data-checkbox-group="${f.name}"]:checked`);
+      const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+      values[f.name] = JSON.stringify(selectedValues);
+      return;
+    }
+
     const el = form.querySelector(`[data-field="${f.name}"]`);
     if(!el) return;
-    const wrap = form.querySelector(`[data-field-wrap="${f.name}"]`);
-    const err = wrap.querySelector('.err-msg');
     el.classList.remove('field-error'); err.classList.add('hidden');
     let raw;
 
@@ -1770,6 +1837,18 @@ document.getElementById('entity-form').addEventListener('submit', async function
       err.classList.remove('hidden');
       hasError = true;
       return;
+    }
+
+    if(f.type === 'phone' && raw) {
+      const cleanPhone = String(raw).replace(/\D/g, '');
+      if(cleanPhone.length !== 11){
+        el.classList.add('field-error');
+        err.textContent = 'O telefone deve conter exatamente 11 números.';
+        err.classList.remove('hidden');
+        hasError = true;
+        return;
+      }
+      raw = cleanPhone;
     }
 
     if(f.type === 'date' && f.limitToEvent && eventoObj && raw && key !== 'contagem'){
@@ -1795,6 +1874,8 @@ document.getElementById('entity-form').addEventListener('submit', async function
     } else if(f.type==='date'){
       values[f.name] = raw || null;
     } else if(f.type==='time'){
+      values[f.name] = raw || null;
+    } else if(f.type==='phone'){
       values[f.name] = raw || null;
     } else { 
       values[f.name] = (f.name === 'email') ? (raw ? raw.trim().toLowerCase() : null) : (raw ? raw.trim().toUpperCase() : null); 

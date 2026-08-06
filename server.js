@@ -7,6 +7,16 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+const path = require('path');
+
+// Serve arquivos estáticos da pasta atual
+app.use(express.static(__dirname));
+
+// Rota principal
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // Configuração da conexão com o banco de dados (Neon / PostgreSQL) com SSL e dotenv
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -58,13 +68,20 @@ async function initDB() {
         ativo BOOLEAN DEFAULT TRUE
       );
 
+      CREATE TABLE IF NOT EXISTS perfil (
+        codperfil SERIAL PRIMARY KEY,
+        descricao TEXT NOT NULL,
+        permissoes TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS pessoa (
         codpessoa SERIAL PRIMARY KEY,
         nomecompleto TEXT NOT NULL,
         telefone TEXT,
         codprivilegio INT REFERENCES privilegio(codprivilegio),
         codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        codcong INT REFERENCES congregacao(codcong)
+        codcong INT REFERENCES congregacao(codcong),
+        codperfil INT REFERENCES perfil(codperfil)
       );
 
       CREATE TABLE IF NOT EXISTS escalas (
@@ -114,7 +131,7 @@ app.get('/api/health/check', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-const entities = ['evento', 'setor', 'congregacao', 'privilegio', 'periodo', 'parametros', 'pessoa', 'escalas', 'contagem', 'usuario', 'configmapa'];
+const entities = ['evento', 'setor', 'congregacao', 'privilegio', 'periodo', 'parametros', 'perfil', 'pessoa', 'escalas', 'contagem', 'usuario', 'configmapa'];
 
 entities.forEach(table => {
   const pkMap = {
@@ -124,6 +141,7 @@ entities.forEach(table => {
     privilegio: 'codprivilegio',
     periodo: 'codperiodo',
     parametros: 'codparametro',
+    perfil: 'codperfil',
     pessoa: 'codpessoa',
     escalas: 'codescala',
     contagem: 'codcont',
