@@ -551,6 +551,7 @@ function renderDashboard(){
   const pessoas = (db['pessoa']||[]).filter(p => !evId || p.codevento == evId);
   const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
+  const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
   const periodos = db['periodo'] || [];
 
   let contagensFiltradas = contagens;
@@ -578,7 +579,11 @@ function renderDashboard(){
     ? setoresPendentes.map(s => `<span class="inline-block bg-[#ef4444]/10 text-[#ef4444] text-xs px-2 py-1 rounded font-medium mr-1.5 mb-1.5">${escapeHtml(s.descricao)}</span>`).join('')
     : '<p class="text-xs text-[#10b981]">Todos os setores já informaram contagem nesta seleção!</p>';
 
-  let periodoOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(dashboardPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
+  // Períodos com base exclusivamente na tabela de parâmetros (independente de ativo)
+  const periodosIdsParametros = new Set(parametros.map(p => String(p.codperiodo)));
+  const periodosParametros = periodos.filter(p => periodosIdsParametros.has(String(p.codperiodo)));
+
+  let periodoOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodosParametros.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(dashboardPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
 
   tabHome.innerHTML = `
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -655,10 +660,10 @@ function renderDashboard(){
   const periodoEl = document.getElementById('dashboard-periodo-filter');
   if(periodoEl) periodoEl.value = dashboardPeriodoFilter;
 
-  renderDashboardChart(contagens, periodos);
+  renderDashboardChart(contagens, periodosParametros);
 }
 
-function renderDashboardChart(contagens, periodos){
+function renderDashboardChart(contagens, periodosParametros){
   const ctx1 = document.getElementById('chartCanvas1');
   if(!ctx1) return;
 
@@ -670,7 +675,7 @@ function renderDashboardChart(contagens, periodos){
   const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
 
   diasUnicos.forEach((dia, idx) => {
-    periodos.forEach((per, pIdx) => {
+    periodosParametros.forEach((per, pIdx) => {
       if (dashboardPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(dashboardPeriodoFilter)) return;
       
       const subCont = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
@@ -738,9 +743,13 @@ function renderRelatorios(){
   const evId = globalEventoId;
   const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
+  const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
   const periodos = db['periodo'] || [];
 
-  let periodoOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(relatorioPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
+  const periodosIdsParametros = new Set(parametros.map(p => String(p.codperiodo)));
+  const periodosParametros = periodos.filter(p => periodosIdsParametros.has(String(p.codperiodo)));
+
+  let periodoOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodosParametros.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(relatorioPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
 
   tabRep.innerHTML = `
     <div class="mb-6">
@@ -820,10 +829,10 @@ function renderRelatorios(){
   const periodoEl = document.getElementById('relatorio-periodo-filter');
   if(periodoEl) periodoEl.value = relatorioPeriodoFilter;
 
-  renderRelatorioCharts(contagens, periodos, setores);
+  renderRelatorioCharts(contagens, periodosParametros, setores);
 }
 
-function renderRelatorioCharts(contagens, periodos, setores){
+function renderRelatorioCharts(contagens, periodosParametros, setores){
   const ctx1 = document.getElementById('chartCanvasRep1');
   const ctx2 = document.getElementById('chartCanvasRep2');
   if(!ctx1 || !ctx2) return;
@@ -836,7 +845,7 @@ function renderRelatorioCharts(contagens, periodos, setores){
   const palette = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
 
   diasUnicos.forEach((dia, idx) => {
-    periodos.forEach((per, pIdx) => {
+    periodosParametros.forEach((per, pIdx) => {
       if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
       
       const subCont = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
@@ -852,7 +861,7 @@ function renderRelatorioCharts(contagens, periodos, setores){
 
   const labels2 = [];
   diasUnicos.forEach(dia => {
-    periodos.forEach(per => {
+    periodosParametros.forEach(per => {
       if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
       const temReg = contagens.some(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
       if (relatorioDataFilter !== 'ALL' || temReg) {
@@ -864,7 +873,7 @@ function renderRelatorioCharts(contagens, periodos, setores){
   const datasets2 = setores.map((setor, idx) => {
     const dataPoints = [];
     diasUnicos.forEach(dia => {
-      periodos.forEach(per => {
+      periodosParametros.forEach(per => {
         if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
         const temReg = contagens.some(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
         if (relatorioDataFilter !== 'ALL' || temReg) {
@@ -977,6 +986,10 @@ function abrirModalFiltroSetores(){
   const evId = globalEventoId;
   const ev = (db['evento']||[]).find(e => e.codevento == evId);
   const periodos = db['periodo'] || [];
+  const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
+
+  const periodosIdsParametros = new Set(parametros.map(p => String(p.codperiodo)));
+  const periodosParametros = periodos.filter(p => periodosIdsParametros.has(String(p.codperiodo)));
 
   const selectDate = document.getElementById('report-filter-date');
   const selectPeriodo = document.getElementById('report-filter-periodo');
@@ -996,7 +1009,7 @@ function abrirModalFiltroSetores(){
     selectDate.innerHTML = dates.map(d => `<option value="${d}">${formatDateBR(d)}</option>`).join('');
   }
 
-  selectPeriodo.innerHTML = periodos.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
+  selectPeriodo.innerHTML = periodosParametros.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
 
   openModal('modal-report-filter');
 }
@@ -1416,7 +1429,6 @@ function renderTable(key){
     rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
   }
 
-  // Ordenação específica para Contagens: por Data, Período e Setor
   if (key === 'contagem') {
     rows.sort((a, b) => {
       const dataA = (a.data || '').split('T')[0];
@@ -1549,10 +1561,11 @@ function openEntityModal(key, id){
       }
 
       if(key === 'contagem' && f.name === 'data'){
-        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
-        const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont.split('T')[0]))].sort();
+        // Considera todas as datas cadastradas na tabela de parâmetros independentemente se está ativo ou não
+        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId));
+        const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : ''))].filter(Boolean).sort();
         
-        let dateOpts = '<option value="">Selecione uma data liberada…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
+        let dateOpts = '<option value="">Selecione uma data cadastrada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
         control = `<select data-field="${f.name}" class="${base}">${dateOpts}</select>`;
       } else {
         control = `<input type="date" data-field="${f.name}" value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
