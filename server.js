@@ -1,232 +1,115 @@
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const { Pool } = require('pg');
+const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
 
-const path = require('path');
-
-// Serve arquivos estáticos da pasta atual
-app.use(express.static(__dirname));
-
-// Rota principal
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Configuração da conexão com o banco de dados (Neon / PostgreSQL) com SSL e dotenv
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-async function initDB() {
-  const client = await pool.connect();
+// Health check endpoint
+app.get('/api/health/check', async (req, res) => {
   try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS evento (
-        codevento SERIAL PRIMARY KEY,
-        descricao TEXT NOT NULL,
-        data_inicio DATE NOT NULL,
-        data_final DATE NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS setor (
-        codsetor SERIAL PRIMARY KEY,
-        descricao TEXT NOT NULL,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        numass INT
-      );
-
-      CREATE TABLE IF NOT EXISTS congregacao (
-        codcong SERIAL PRIMARY KEY,
-        nome_congregacao TEXT NOT NULL,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS privilegio (
-        codprivilegio SERIAL PRIMARY KEY,
-        descricao TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS periodo (
-        codperiodo SERIAL PRIMARY KEY,
-        descricao TEXT NOT NULL,
-        horario_inicial TIME,
-        horario_final TIME
-      );
-
-      CREATE TABLE IF NOT EXISTS parametros (
-        codparametro SERIAL PRIMARY KEY,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        datacont DATE NOT NULL,
-        horacont TIME,
-        codperiodo INT REFERENCES periodo(codperiodo),
-        ativo BOOLEAN DEFAULT TRUE
-      );
-
-      CREATE TABLE IF NOT EXISTS perfil (
-        codperfil SERIAL PRIMARY KEY,
-        descricao TEXT NOT NULL,
-        permissoes TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS pessoa (
-        codpessoa SERIAL PRIMARY KEY,
-        nomecompleto TEXT NOT NULL,
-        telefone TEXT UNIQUE NOT NULL,
-        codprivilegio INT REFERENCES privilegio(codprivilegio) NOT NULL,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE NOT NULL,
-        codcong INT REFERENCES congregacao(codcong) NOT NULL,
-        codperfil INT REFERENCES perfil(codperfil) NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS escalas (
-        codescala SERIAL PRIMARY KEY,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        codpessoa INT REFERENCES pessoa(codpessoa) ON DELETE CASCADE,
-        codsetor INT REFERENCES setor(codsetor) ON DELETE CASCADE,
-        codperiodo INT REFERENCES periodo(codperiodo),
-        data DATE NOT NULL,
-        hora_inicio TIME NOT NULL,
-        hora_fim TIME NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS contagem (
-        codcont SERIAL PRIMARY KEY,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        data DATE NOT NULL,
-        codperiodo INT REFERENCES periodo(codperiodo),
-        codsetor INT REFERENCES setor(codsetor) ON DELETE CASCADE,
-        codpessoa INT REFERENCES pessoa(codpessoa) ON DELETE CASCADE,
-        quantidade INT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS usuario (
-        codusuario SERIAL PRIMARY KEY,
-        nome TEXT NOT NULL,
-        email TEXT NOT NULL,
-        senha TEXT NOT NULL,
-        ativo BOOLEAN DEFAULT TRUE
-      );
-
-      CREATE TABLE IF NOT EXISTS configmapa (
-        codmapa SERIAL PRIMARY KEY,
-        codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
-        imagem_base64 TEXT
-      );
-    `);
-    console.log("Banco de dados inicializado com sucesso.");
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok' });
   } catch (err) {
-    console.error("Erro ao inicializar o banco de dados:", err);
-  } finally {
-    client.release();
+    res.status(500).json({ status: 'error', error: err.message });
   }
-}
-
-app.get('/api/health/check', (req, res) => {
-  res.json({ status: 'ok' });
 });
 
-const entities = ['evento', 'setor', 'congregacao', 'privilegio', 'periodo', 'parametros', 'perfil', 'pessoa', 'escalas', 'contagem', 'usuario', 'configmapa'];
+// Configuração do Mapa do Evento
+app.get('/api/configmapa', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM configmapa');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-entities.forEach(table => {
+app.post('/api/configmapa/salvar', async (req, res) => {
+  const { codevento, imagem_base64 } = req.body;
+  try {
+    await pool.query('DELETE FROM configmapa WHERE codevento = $1', [codevento]);
+    const { rows } = await pool.query(
+      'INSERT INTO configmapa (codevento, imagem_base64) VALUES ($1, $2) RETURNING *',
+      [codevento, imagem_base64]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rotas genéricas para as demais tabelas do sistema
+const tables = [
+  'evento', 'setor', 'congregacao', 'privilegio', 
+  'periodo', 'perfil', 'parametros', 'pessoa', 
+  'escalas', 'contagem', 'usuario'
+];
+
+tables.forEach(table => {
   const pkMap = {
     evento: 'codevento',
     setor: 'codsetor',
     congregacao: 'codcong',
     privilegio: 'codprivilegio',
     periodo: 'codperiodo',
-    parametros: 'codparametro',
     perfil: 'codperfil',
+    parametros: 'codparametro',
     pessoa: 'codpessoa',
     escalas: 'codescala',
     contagem: 'codcont',
-    usuario: 'codusuario',
-    configmapa: 'codmapa'
+    usuario: 'codusuario'
   };
   const pk = pkMap[table];
 
   app.get(`/api/${table}`, async (req, res) => {
     try {
-      const result = await pool.query(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
-      res.json(result.rows);
+      const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
+      res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
   app.post(`/api/${table}`, async (req, res) => {
+    const data = req.body;
+    const keys = Object.keys(data);
+    const values = Object.values(data);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
     try {
-      const keys = Object.keys(req.body);
-      const values = Object.values(req.body);
-      if (keys.length === 0) {
-        return res.status(400).json({ error: 'Nenhum dado fornecido.' });
-      }
-
-      // Validação específica para garantir unicidade do telefone na tabela pessoa
-      if (table === 'pessoa' && req.body.telefone) {
-        const telCheck = await pool.query('SELECT codpessoa FROM pessoa WHERE telefone = $1', [req.body.telefone]);
-        if (telCheck.rows.length > 0) {
-          return res.status(400).json({ error: 'Este número de telefone já está cadastrado para outra pessoa.' });
-        }
-      }
-
-      const indicators = keys.map((_, i) => `$${i + 1}`).join(', ');
-      const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${indicators}) RETURNING *`;
-      const result = await pool.query(query, values);
-      res.status(201).json(result.rows[0]);
+      const { rows } = await pool.query(query, values);
+      res.status(201).json(rows[0]);
     } catch (err) {
-      if (err.code === '23505') {
-        return res.status(400).json({ error: 'Este número de telefone já está cadastrado.' });
-      }
       res.status(500).json({ error: err.message });
     }
   });
 
   app.put(`/api/${table}/:id`, async (req, res) => {
+    const id = req.params.id;
+    const data = req.body;
+    const keys = Object.keys(data);
+    const values = Object.values(data);
+    const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${keys.length + 1} RETURNING *`;
     try {
-      const id = req.params.id;
-      const keys = Object.keys(req.body);
-      const values = Object.values(req.body);
-      if (keys.length === 0) {
-        return res.status(400).json({ error: 'Nenhum dado fornecido.' });
-      }
-
-      // Validação específica de unicidade do telefone em edições de pessoa
-      if (table === 'pessoa' && req.body.telefone) {
-        const telCheck = await pool.query('SELECT codpessoa FROM pessoa WHERE telefone = $1 AND codpessoa != $2', [req.body.telefone, id]);
-        if (telCheck.rows.length > 0) {
-          return res.status(400).json({ error: 'Este número de telefone já pertence a outra pessoa cadastrada.' });
-        }
-      }
-
-      const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
-      values.push(id);
-      const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${values.length} RETURNING *`;
-      const result = await pool.query(query, values);
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Registro não encontrado.' });
-      }
-      res.json(result.rows[0]);
+      const { rows } = await pool.query(query, [...values, id]);
+      res.json(rows[0]);
     } catch (err) {
-      if (err.code === '23505') {
-        return res.status(400).json({ error: 'Este número de telefone já está cadastrado.' });
-      }
       res.status(500).json({ error: err.message });
     }
   });
 
   app.delete(`/api/${table}/:id`, async (req, res) => {
+    const id = req.params.id;
     try {
-      const id = req.params.id;
-      const result = await pool.query(`DELETE FROM ${table} WHERE ${pk} = $1 RETURNING *`, [id]);
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Registro não encontrado.' });
-      }
+      await pool.query(`DELETE FROM ${table} WHERE ${pk} = $1`, [id]);
       res.status(204).send();
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -234,24 +117,7 @@ entities.forEach(table => {
   });
 });
 
-app.post('/api/configmapa/salvar', async (req, res) => {
-  try {
-    const { codevento, imagem_base64 } = req.body;
-    const existe = await pool.query('SELECT * FROM configmapa WHERE codevento = $1', [codevento]);
-    let result;
-    if (existe.rows.length > 0) {
-      result = await pool.query('UPDATE configmapa SET imagem_base64 = $1 WHERE codevento = $2 RETURNING *', [imagem_base64, codevento]);
-    } else {
-      result = await pool.query('INSERT INTO configmapa (codevento, imagem_base64) VALUES ($1, $2) RETURNING *', [codevento, imagem_base64]);
-    }
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
-  await initDB();
+app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
