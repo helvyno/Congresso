@@ -246,7 +246,7 @@ const ENTITIES = [
   ]},
   { key:'usuario', label:'Usuário', plural:'Usuários', pk:'codusuario', isGlobal:true, display:r=>r.nome, fields:[
     {name:'nome', label:'Nome', type:'text', required:true, placeholder:'Nome do usuário'},
-    {name:'email', label:'E-mail', type:'text', required:true, placeholder:'email@datasabesistemas.com.br'},
+    {name:'login', label:'Login (Telefone)', type:'phone', required:true, placeholder:'34988887777'},
     {name:'senha', label:'Senha', type:'text', required:true, placeholder:'Senha de acesso'},
     {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
   ]}
