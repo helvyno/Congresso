@@ -38,26 +38,26 @@
 </head>
 <body class="bg-slate-100 dark:bg-[#0f172a] text-slate-800 dark:text-white h-screen flex flex-col transition-colors duration-200">
 
-  <header id="main-header" class="bg-white dark:bg-[#1e293b] border-b border-slate-200 dark:border-[#334155] px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-sm">
-    <div class="flex items-center gap-3">
+  <header id="main-header" style="display: flex; align-items: center; justify-content: space-between;" class="bg-white dark:bg-[#1e293b] border-b border-slate-200 dark:border-[#334155] px-4 md:px-6 py-3 flex-shrink-0 z-50 shadow-sm">
+    <div style="display: flex; align-items: center; gap: 12px;">
       <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] text-slate-600 dark:text-[#94a3b8] hover:text-slate-900 dark:hover:text-white transition-colors" title="Ocultar/Exibir Menu">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
       <div class="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">DS</div>
       <div>
-        <h1 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Indicadores</h1>
+        <h1 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Gestão de Indicadores</h1>
         <p class="text-xs text-slate-500 dark:text-[#94a3b8] hidden sm:block">DATASABE Sistemas</p>
       </div>
     </div>
 
-    <div id="evento-filter-wrapper" class="flex items-center gap-2 bg-slate-50 dark:bg-[#0f172a] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#334155]">
+    <div id="evento-filter-wrapper" class="hidden md:flex items-center gap-2 bg-slate-50 dark:bg-[#0f172a] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#334155]">
       <span class="text-xs text-slate-500 dark:text-[#94a3b8] font-medium whitespace-nowrap">Evento Ativo:</span>
       <select id="global-evento-filter" onchange="changeGlobalEvento(this.value)" class="bg-transparent text-sm font-semibold text-blue-600 dark:text-[#3b82f6] focus:outline-none cursor-pointer">
         <option value="">Carregando eventos...</option>
       </select>
     </div>
 
-    <div class="flex items-center gap-3">
+    <div style="display: flex; align-items: center; gap: 12px;">
       <button onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] text-slate-600 dark:text-[#94a3b8] hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium" title="Alternar Tema Claro/Escuro">
         <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
         <svg class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -199,24 +199,6 @@ const ICONS = {
   parametros: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>',
   mapa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>'
 };
-
-const AVAILABLE_MENUS = [
-  { key: 'Dashboard', label: 'Dashboard' },
-  { key: 'Relatórios', label: 'Relatórios' },
-  { key: 'Designações', label: 'Designações' },
-  { key: 'Mapa do Evento', label: 'Mapa do Evento' },
-  { key: 'Eventos', label: 'Eventos' },
-  { key: 'Setores', label: 'Setores' },
-  { key: 'Congregações', label: 'Congregações' },
-  { key: 'Privilégios', label: 'Privilégios' },
-  { key: 'Períodos', label: 'Períodos' },
-  { key: 'Parâmetros', label: 'Parâmetros' },
-  { key: 'Perfis', label: 'Perfis' },
-  { key: 'Pessoas', label: 'Pessoas' },
-  { key: 'Escalas', label: 'Escalas' },
-  { key: 'Contagens', label: 'Contagens' },
-  { key: 'Usuários', label: 'Usuários' }
-];
 
 const ENTITIES = [
   { key:'home', label:'Início', plural:'Dashboard', isHome:true },
