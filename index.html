@@ -122,6 +122,7 @@ let sidebarOpen = false;
 let chartInstance1 = null;
 let chartInstanceRep1 = null;
 let chartInstanceRep2 = null;
+let chartInstanceRep3 = null;
 
 function toggleSidebar(e) {
   if (e) e.stopPropagation();
@@ -814,10 +815,17 @@ function renderRelatorios(){
       </div>
     </div>
 
-    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl pb-12">
+    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl">
       <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Quantidade da Contagem por Setor (por Data / Período)</h3>
       <div class="relative w-full h-[380px]">
         <canvas id="chartCanvasRep2"></canvas>
+      </div>
+    </div>
+
+    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-6 shadow-xl pb-12">
+      <h3 class="text-sm font-bold text-[#94a3b8] uppercase tracking-wider mb-3">Comparativo: Contagem por Setor vs. Assentos Disponíveis (numass)</h3>
+      <div class="relative w-full h-[380px]">
+        <canvas id="chartCanvasRep3"></canvas>
       </div>
     </div>
   `;
@@ -834,7 +842,8 @@ function renderRelatorios(){
 function renderRelatorioCharts(contagens, periodosParametros, setores){
   const ctx1 = document.getElementById('chartCanvasRep1');
   const ctx2 = document.getElementById('chartCanvasRep2');
-  if(!ctx1 || !ctx2) return;
+  const ctx3 = document.getElementById('chartCanvasRep3');
+  if(!ctx1 || !ctx2 || !ctx3) return;
 
   const diasUnicos = relatorioDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data.split('T')[0]))].sort() : [relatorioDataFilter];
   
@@ -894,8 +903,24 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
     };
   });
 
+  // Dados para o Terceiro Gráfico: Comparativo Setor (Contagem Filtrada vs numass)
+  let contagensFiltradas3 = contagens;
+  if (relatorioDataFilter !== 'ALL') {
+    contagensFiltradas3 = contagensFiltradas3.filter(ct => ct.data.split('T')[0] === relatorioDataFilter);
+  }
+  if (relatorioPeriodoFilter !== 'ALL') {
+    contagensFiltradas3 = contagensFiltradas3.filter(ct => String(ct.codperiodo) === String(relatorioPeriodoFilter));
+  }
+
+  const labels3 = setores.map(s => s.descricao);
+  const dataContagemSetor = setores.map(s => {
+    return contagensFiltradas3.filter(c => c.codsetor == s.codsetor).reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+  });
+  const dataAssentosSetor = setores.map(s => Number(s.numass || 0));
+
   if(chartInstanceRep1) chartInstanceRep1.destroy();
   if(chartInstanceRep2) chartInstanceRep2.destroy();
+  if(chartInstanceRep3) chartInstanceRep3.destroy();
 
   chartInstanceRep1 = new Chart(ctx1, {
     type: 'bar',
@@ -972,6 +997,61 @@ function renderRelatorioCharts(contagens, periodosParametros, setores){
         },
         y: {
           stacked: false,
+          beginAtZero: true,
+          grid: { color: 'rgba(51, 65, 85, 0.4)' },
+          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, precision: 0 }
+        }
+      }
+    }
+  });
+
+  chartInstanceRep3 = new Chart(ctx3, {
+    type: 'bar',
+    data: {
+      labels: labels3.length > 0 ? labels3 : ['Nenhum setor'],
+      datasets: [
+        {
+          label: 'Contagem (Filtro Atual)',
+          data: dataContagemSetor,
+          backgroundColor: '#3b82f6',
+          borderRadius: 4,
+          borderWidth: 1,
+          borderColor: '#334155'
+        },
+        {
+          label: 'Assentos Disponíveis (numass)',
+          data: dataAssentosSetor,
+          backgroundColor: '#10b981',
+          borderRadius: 4,
+          borderWidth: 1,
+          borderColor: '#334155'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { 
+          display: true, 
+          position: 'bottom',
+          labels: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#ffffff',
+          bodyColor: '#cbd5e1',
+          borderColor: '#334155',
+          borderWidth: 1,
+          padding: 10
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+        },
+        y: {
           beginAtZero: true,
           grid: { color: 'rgba(51, 65, 85, 0.4)' },
           ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, precision: 0 }
@@ -1346,7 +1426,8 @@ async function renderMapa(){
 
   let contentHtml = '';
   if(imgSrc){
-    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="max-w-full h-auto rounded border border-[#334155] shadow-md bg-white">`;
+    // Ajuste em object-contain e max-h-[70vh] para visualização perfeita em tablets, notebooks e celulares sem cortes
+    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[70vh] w-auto max-w-full rounded border border-[#334155] shadow-md bg-white">`;
   } else {
     contentHtml = `
       <div class="text-center py-12">
@@ -1474,11 +1555,19 @@ function renderTable(key){
     });
   }
 
-  // Ordenação específica para a tela de Pessoas: por Nome completo
   if (key === 'pessoa') {
     rows.sort((a, b) => {
       const nomeA = (a.nomecompleto || '').toLowerCase();
       const nomeB = (b.nomecompleto || '').toLowerCase();
+      return nomeA.localeCompare(nomeB);
+    });
+  }
+
+  // Ordenação específica para a tela de Congregações: por Nome da Congregação
+  if (key === 'congregacao') {
+    rows.sort((a, b) => {
+      const nomeA = (a.nome_congregacao || '').toLowerCase();
+      const nomeB = (b.nome_congregacao || '').toLowerCase();
       return nomeA.localeCompare(nomeB);
     });
   }
