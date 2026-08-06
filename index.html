@@ -1199,7 +1199,6 @@ function renderDesignacoes(){
   const evId = globalEventoId;
   let escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
 
-  // Ordenação das designações / WhatsApp: Data, Setor, Período, Nome
   escalas.sort((a, b) => {
     const dataA = (a.data || '').split('T')[0];
     const dataB = (b.data || '').split('T')[0];
@@ -1455,7 +1454,6 @@ function renderTable(key){
     });
   }
 
-  // Ordenação específica para a tela de Escalas: Data, Setor, Período, Nome
   if (key === 'escalas') {
     rows.sort((a, b) => {
       const dataA = (a.data || '').split('T')[0];
@@ -1473,6 +1471,15 @@ function renderTable(key){
       const pessoaA = refRelationDescricao('pessoa', a.codpessoa);
       const pessoaB = refRelationDescricao('pessoa', b.codpessoa);
       return pessoaA.localeCompare(pessoaB);
+    });
+  }
+
+  // Ordenação específica para a tela de Pessoas: por Nome completo
+  if (key === 'pessoa') {
+    rows.sort((a, b) => {
+      const nomeA = (a.nomecompleto || '').toLowerCase();
+      const nomeB = (b.nomecompleto || '').toLowerCase();
+      return nomeA.localeCompare(nomeB);
     });
   }
 
