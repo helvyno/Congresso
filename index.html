@@ -65,6 +65,7 @@
     </main>
   </div>
 
+  <!-- Modal genérico para formulários -->
   <div id="modal-form" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
     <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
       <div class="flex items-center justify-between mb-1">
@@ -81,6 +82,33 @@
           <button type="button" onclick="closeModal('modal-form')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-[#94a3b8] border border-[#334155] hover:bg-[#334155]">Cancelar</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal para filtro do relatório de setores -->
+  <div id="modal-report-filter" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+    <div class="bg-[#1e293b] rounded-xl border border-[#334155] w-full max-w-md p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-lg font-bold text-white">Gerar Cartão de Setores</h3>
+        <button onclick="closeModal('modal-report-filter')" class="text-[#94a3b8] hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <p class="text-xs text-[#94a3b8] mb-5">Selecione o dia e o período para buscar os indicadores escalados:</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-[#94a3b8] mb-1.5">Data <span class="text-[#ef4444]">*</span></label>
+          <select id="report-filter-date" class="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-[#94a3b8] mb-1.5">Período <span class="text-[#ef4444]">*</span></label>
+          <select id="report-filter-periodo" class="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"></select>
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="confirmarGerarPdfSetores()" class="flex-1 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors">Gerar PDF</button>
+          <button type="button" onclick="closeModal('modal-report-filter')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-[#94a3b8] border border-[#334155] hover:bg-[#334155]">Cancelar</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -109,7 +137,6 @@ function toggleSidebar(e) {
   }
 }
 
-// Fechar menu ao clicar fora
 document.addEventListener('click', function(e) {
   const sidebar = document.getElementById('sidebar-nav');
   const toggleBtn = document.getElementById('sidebar-toggle-btn');
@@ -160,8 +187,10 @@ const ENTITIES = [
   { key:'privilegio', label:'Privilégio', plural:'Privilégios', pk:'codprivilegio', display:r=>r.descricao, isGlobal:true, fields:[ 
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Coordenador de setor'} 
   ]},
-  { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>r.descricao, isGlobal:true, fields:[
-    {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'}
+  { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>`${r.descricao} (${r.horario_inicial||'--:--'} às ${r.horario_final||'--:--'})`, isGlobal:true, fields:[
+    {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'},
+    {name:'horario_inicial', label:'Horário Inicial', type:'time', required:true},
+    {name:'horario_final', label:'Horário Final', type:'time', required:true}
   ]},
   { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
@@ -181,9 +210,10 @@ const ENTITIES = [
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true, searchable:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onPeriodChange:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
-    {name:'hora_inicio', label:'Hora início', type:'time', required:true},
-    {name:'hora_fim', label:'Hora fim', type:'time', required:true}
+    {name:'hora_inicio', label:'Hora início', type:'time', required:true, readonly:true},
+    {name:'hora_fim', label:'Hora fim', type:'time', required:true, readonly:true}
   ]},
   { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', display:r=>String(r.quantidade), fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
@@ -414,6 +444,7 @@ function buildLayout(){
       return `<div id="tab-home" class="tab-content overflow-y-auto ${current==='home'?'active':''}"></div>`;
     }
     if(e.isReport){
+      if(isPublicView) return '';
       return `<div id="tab-relatorios" class="tab-content overflow-y-auto ${current==='relatorios'?'active':''}"></div>`;
     }
     if(e.isCustom){
@@ -466,6 +497,7 @@ function buildLayout(){
 }
 
 async function showTab(key){
+  if(isPublicView && key === 'relatorios') return;
   current = key;
   sidebarOpen = false;
   const sidebar = document.getElementById('sidebar-nav');
@@ -700,6 +732,7 @@ function renderDashboardChart(contagens, periodos){
 }
 
 function renderRelatorios(){
+  if(isPublicView) return;
   const tabRep = document.getElementById('tab-relatorios');
   if(!tabRep) return;
 
@@ -726,7 +759,7 @@ function renderRelatorios(){
           <h3 class="text-lg font-bold text-white mb-2">CO-24-T - Setores</h3>
           <p class="text-sm text-[#94a3b8] mb-6">Cartão de contagem da assistência do congresso contendo a relação completa de setores, número de assentos e os respectivos indicadores.</p>
         </div>
-        <button onclick="gerarPdfSetores()" class="w-full bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+        <button onclick="abrirModalFiltroSetores()" class="w-full bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           CO-24-T - Setores (PDF)
         </button>
@@ -946,10 +979,54 @@ function renderRelatorioCharts(contagens, periodos, setores){
   });
 }
 
-function gerarPdfSetores(){
+function abrirModalFiltroSetores(){
+  const evId = globalEventoId;
+  const ev = (db['evento']||[]).find(e => e.codevento == evId);
+  const periodos = db['periodo'] || [];
+
+  const selectDate = document.getElementById('report-filter-date');
+  const selectPeriodo = document.getElementById('report-filter-periodo');
+
+  if(!ev || !ev.data_inicio || !ev.data_final){
+    selectDate.innerHTML = '<option value="">Nenhuma data no evento</option>';
+  } else {
+    const dates = [];
+    let curr = new Date(ev.data_inicio + 'T00:00:00');
+    const end = new Date(ev.data_final + 'T00:00:00');
+    while(curr <= end){
+      dates.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
+    }
+    selectDate.innerHTML = dates.map(d => `<option value="${d}">${formatDateBR(d)}</option>`).join('');
+  }
+
+  selectPeriodo.innerHTML = periodos.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
+
+  openModal('modal-report-filter');
+}
+
+function confirmarGerarPdfSetores(){
+  const dataSelecionada = document.getElementById('report-filter-date').value;
+  const periodoSelecionado = document.getElementById('report-filter-periodo').value;
+
+  if(!dataSelecionada || !periodoSelecionado){
+    showToast('Selecione a data e o período.');
+    return;
+  }
+
+  closeModal('modal-report-filter');
+  gerarPdfSetores(dataSelecionada, periodoSelecionado);
+}
+
+function gerarPdfSetores(selData, selPeriodo){
   const evId = globalEventoId;
   const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
-  const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
+  const escalas = (db['escalas']||[]).filter(es => {
+    if(evId && es.codevento != evId) return false;
+    if(es.data !== selData) return false;
+    if(es.codperiodo && String(es.codperiodo) !== String(selPeriodo)) return false;
+    return true;
+  });
 
   const cleanRows = setores.map((setor, i) => {
     const setorNome = setor ? setor.descricao : '';
@@ -981,17 +1058,23 @@ function gerarPdfSetores(){
     pageSize: 'A4',
     pageMargins: [40, 40, 40, 40],
     content: [
-      { text: 'CARTÃO DE CONTAGEM DA ASSISTÊNCIA DO CONGRESSO', alignment: 'center', bold: true, fontSize: 13, margin: [0, 0, 0, 15] },
-      {
-        columns: [
-          { text: 'Capitão dos indicadores: ____________________________________________________', fontSize: 10, margin: [0, 0, 0, 15] }
-        ]
-      },
       {
         table: {
-          headerRows: 1,
+          headerRows: 4,
           widths: ['30%', '25%', '45%'],
           body: [
+            [
+              { text: 'CARTÃO DE CONTAGEM DA ASSISTÊNCIA DO CONGRESSO', colSpan: 3, alignment: 'center', bold: true, fontSize: 13, border: [false, false, false, false], margin: [0, 0, 0, 15] },
+              {}, {}
+            ],
+            [
+              { text: 'Capitão dos indicadores: ____________________________________________________', colSpan: 3, fontSize: 10, border: [false, false, false, false], margin: [0, 0, 0, 15] },
+              {}, {}
+            ],
+            [
+              { text: '', colSpan: 3, border: [false, false, false, false], margin: [0, 0, 0, 5] },
+              {}, {}
+            ],
             [
               { text: 'SETOR', bold: true, fontSize: 10, border: [false, false, false, true], margin: [0, 0, 0, 5] },
               { text: 'N.º DE ASSENTOS', bold: true, fontSize: 10, alignment: 'center', border: [false, false, false, true], margin: [0, 0, 0, 5] },
@@ -1000,11 +1083,6 @@ function gerarPdfSetores(){
             ...cleanRows
           ]
         }
-      },
-      {
-        columns: [
-          { text: 'CO-24-T   02/13 (01/20)', fontSize: 9, margin: [0, 30, 0, 0] }
-        ]
       }
     ]
   };
@@ -1014,38 +1092,56 @@ function gerarPdfSetores(){
 
 function gerarPdfistencia(){
   const evId = globalEventoId;
+  const eventoObj = (db['evento']||[]).find(e => e.codevento == evId);
   const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
 
-  parametros.sort((a, b) => (a.datacont || '').localeCompare(b.datacont || ''));
+  const diasUnicos = [];
+  if(eventoObj && eventoObj.data_inicio && eventoObj.data_final){
+    let curr = new Date(eventoObj.data_inicio + 'T00:00:00');
+    const end = new Date(eventoObj.data_final + 'T00:00:00');
+    while(curr <= end){
+      diasUnicos.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
+    }
+  } else {
+    const setDatas = new Set([...parametros.map(p => p.datacont), ...contagens.map(c => c.data)]);
+    diasUnicos.push(...[...setDatas].sort());
+  }
 
-  const diasUnicos = [...new Set(parametros.map(p => p.datacont))];
   const labelsDias = ['PRIMEIRO DIA', 'SEGUNDO DIA', 'TERCEIRO DIA', 'QUARTO DIA', 'QUINTO DIA', 'SEXTO DIA'];
-
   let bodyRows = [];
   
   diasUnicos.forEach((dia, index) => {
     const diaLabel = labelsDias[index] || `${index+1}º DIA`;
     const paramsDoDia = parametros.filter(p => p.datacont === dia);
 
-    paramsDoDia.forEach((param, pIdx) => {
-      const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
-      const contsDoParam = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(param.codperiodo));
-      const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+    if(paramsDoDia.length > 0){
+      paramsDoDia.forEach((param, pIdx) => {
+        const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
+        const contsDoParam = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(param.codperiodo));
+        const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
 
+        bodyRows.push([
+          { text: pIdx === 0 ? diaLabel : '', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
+          { text: horaCont, alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+          { text: somaAssistencia > 0 ? String(somaAssistencia) : '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
+        ]);
+      });
+    } else {
       bodyRows.push([
-        { text: pIdx === 0 ? diaLabel : '', bold: true, fontSize: 10, margin: [0, 15, 0, 15] },
-        { text: horaCont, alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
-        { text: somaAssistencia > 0 ? String(somaAssistencia) : '', alignment: 'center', fontSize: 11, border: [false, false, false, true], margin: [0, 15, 0, 15] }
+        { text: diaLabel, bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
+        { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
+        { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
       ]);
-    });
+    }
   });
 
   if(bodyRows.length === 0){
     bodyRows.push([
-      { text: 'PRIMEIRO DIA', bold: true, fontSize: 10, margin: [0, 15, 0, 15] },
+      { text: 'PRIMEIRO DIA', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
       { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f1f5f9', margin: [0, 10, 0, 10] },
-      { text: '', alignment: 'center', fontSize: 11, border: [false, false, false, true], margin: [0, 15, 0, 15] }
+      { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
     ]);
   }
 
@@ -1059,12 +1155,12 @@ function gerarPdfistencia(){
           widths: ['30%', '40%', '30%'],
           body: [
             [
-              { text: 'DIA', bold: true, fontSize: 10, border: [false, false, false, true], margin: [0, 0, 0, 8] },
-              { text: 'HORA DA CONTAGEM', bold: true, fontSize: 10, alignment: 'center', border: [false, false, false, true], margin: [0, 0, 0, 8] },
-              { text: 'ASSISTÊNCIA', bold: true, fontSize: 10, alignment: 'center', border: [false, false, false, true], margin: [0, 0, 0, 8] }
+              { text: 'DIA', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 0, 0, 8] },
+              { text: 'HORA DA CONTAGEM', bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 8] },
+              { text: 'ASSISTÊNCIA', bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 8] }
             ],
             [
-              { text: '(USE APENAS OS DIAS QUE SE APLICAM.)', colSpan: 3, alignment: 'center', fontSize: 9, color: '#64748b', border: [false, false, false, false], margin: [0, 5, 0, 15] },
+              { text: '(USE APENAS OS DIAS QUE SE APLICAM.)', colSpan: 3, alignment: 'center', fontSize: 9, color: '#64748b', border: [true, true, true, true], margin: [0, 5, 0, 15] },
               {}, {}
             ],
             ...bodyRows
@@ -1413,15 +1509,16 @@ function openEntityModal(key, id){
         refList = refList.filter(r => r.codevento == globalEventoId);
       }
 
+      const onChangeAttr = f.onPeriodChange ? 'onchange="onEscalaPeriodoChange(this.value)"' : '';
       const opts = refList.map(r=>{
         const rid = r[refEnt.pk];
         return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
       }).join('');
       
       if(f.fixedToGlobal && !ent.isGlobal){
-        control = `<select data-field="${f.name}" class="${base} bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
+        control = `<select data-field="${f.name}" ${onChangeAttr} class="${base} bg-[#1e293b]" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
       } else {
-        control = `<select data-field="${f.name}" class="${base}"><option value="">Selecione…</option>${opts}</select>`;
+        control = `<select data-field="${f.name}" ${onChangeAttr} class="${base}"><option value="">Selecione…</option>${opts}</select>`;
       }
     } else if(f.type==='date'){
       let minAttr = '';
@@ -1441,7 +1538,8 @@ function openEntityModal(key, id){
         control = `<input type="date" data-field="${f.name}" value="${val||''}" ${minAttr} ${maxAttr} class="${base}">`;
       }
     } else if(f.type==='time'){
-      control = `<input type="time" data-field="${f.name}" value="${val||''}" class="${base}">`;
+      const readonlyAttr = f.readonly ? 'readonly style="background-color: #111827; color: #9ca3af; cursor: not-allowed;"' : '';
+      control = `<input type="time" data-field="${f.name}" value="${val||''}" ${readonlyAttr} class="${base}">`;
     } else if(f.type==='number'){
       control = `<input type="number" data-field="${f.name}" value="${val!==undefined && val!==null ? val : ''}" placeholder="${f.placeholder||''}" class="${base}">`;
     } else {
@@ -1455,6 +1553,27 @@ function openEntityModal(key, id){
   }).join('');
 
   openModal('modal-form');
+
+  if(key === 'escalas'){
+    const initialPeriodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+    if(initialPeriodoEl && initialPeriodoEl.value){
+      onEscalaPeriodoChange(initialPeriodoEl.value);
+    }
+  }
+}
+
+function onEscalaPeriodoChange(codPeriodo){
+  const periodo = (db['periodo']||[]).find(p => String(p.codperiodo) === String(codPeriodo));
+  const horaInicioInput = document.querySelector('#modal-form [data-field="hora_inicio"]');
+  const horaFimInput = document.querySelector('#modal-form [data-field="hora_fim"]');
+
+  if(periodo){
+    if(horaInicioInput) horaInicioInput.value = periodo.horario_inicial || '';
+    if(horaFimInput) horaFimInput.value = periodo.horario_final || '';
+  } else {
+    if(horaInicioInput) horaInicioInput.value = '';
+    if(horaFimInput) horaFimInput.value = '';
+  }
 }
 
 document.getElementById('entity-form').addEventListener('submit', async function(ev){
