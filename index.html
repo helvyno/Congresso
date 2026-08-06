@@ -366,8 +366,10 @@ function updateDashboardDateOptions(){
   }
 
   const dates = [];
-  let curr = new Date(ev.data_inicio + 'T00:00:00');
-  const end = new Date(ev.data_final + 'T00:00:00');
+  const inicioStr = ev.data_inicio.split('T')[0];
+  const finalStr = ev.data_final.split('T')[0];
+  let curr = new Date(inicioStr + 'T00:00:00');
+  const end = new Date(finalStr + 'T00:00:00');
   while(curr <= end){
     dates.push(curr.toISOString().split('T')[0]);
     curr.setDate(curr.getDate() + 1);
@@ -553,7 +555,7 @@ function renderDashboard(){
 
   let contagensFiltradas = contagens;
   if (dashboardDataFilter !== 'ALL') {
-    contagensFiltradas = contagensFiltradas.filter(ct => ct.data === dashboardDataFilter);
+    contagensFiltradas = contagensFiltradas.filter(ct => ct.data.split('T')[0] === dashboardDataFilter);
   }
   if (dashboardPeriodoFilter !== 'ALL') {
     contagensFiltradas = contagensFiltradas.filter(ct => String(ct.codperiodo) === String(dashboardPeriodoFilter));
@@ -660,7 +662,7 @@ function renderDashboardChart(contagens, periodos){
   const ctx1 = document.getElementById('chartCanvas1');
   if(!ctx1) return;
 
-  const diasUnicos = dashboardDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data))].sort() : [dashboardDataFilter];
+  const diasUnicos = dashboardDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data.split('T')[0]))].sort() : [dashboardDataFilter];
   
   const labels1 = [];
   const dataValues1 = [];
@@ -671,7 +673,7 @@ function renderDashboardChart(contagens, periodos){
     periodos.forEach((per, pIdx) => {
       if (dashboardPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(dashboardPeriodoFilter)) return;
       
-      const subCont = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+      const subCont = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
       const totalPer = subCont.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
       
       labels1.push(`${formatDateBR(dia)} (${per.descricao})`);
@@ -826,7 +828,7 @@ function renderRelatorioCharts(contagens, periodos, setores){
   const ctx2 = document.getElementById('chartCanvasRep2');
   if(!ctx1 || !ctx2) return;
 
-  const diasUnicos = relatorioDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data))].sort() : [relatorioDataFilter];
+  const diasUnicos = relatorioDataFilter === 'ALL' ? [...new Set(contagens.map(c => c.data.split('T')[0]))].sort() : [relatorioDataFilter];
   
   const labels1 = [];
   const dataValues1 = [];
@@ -837,7 +839,7 @@ function renderRelatorioCharts(contagens, periodos, setores){
     periodos.forEach((per, pIdx) => {
       if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
       
-      const subCont = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+      const subCont = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
       const totalPer = subCont.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
       
       labels1.push(`${formatDateBR(dia)} (${per.descricao})`);
@@ -852,7 +854,7 @@ function renderRelatorioCharts(contagens, periodos, setores){
   diasUnicos.forEach(dia => {
     periodos.forEach(per => {
       if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
-      const temReg = contagens.some(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+      const temReg = contagens.some(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
       if (relatorioDataFilter !== 'ALL' || temReg) {
         labels2.push(`${formatDateBR(dia)} (${per.descricao})`);
       }
@@ -864,9 +866,9 @@ function renderRelatorioCharts(contagens, periodos, setores){
     diasUnicos.forEach(dia => {
       periodos.forEach(per => {
         if (relatorioPeriodoFilter !== 'ALL' && String(per.codperiodo) !== String(relatorioPeriodoFilter)) return;
-        const temReg = contagens.some(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo));
+        const temReg = contagens.some(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo));
         if (relatorioDataFilter !== 'ALL' || temReg) {
-          const sub = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(per.codperiodo) && c.codsetor == setor.codsetor);
+          const sub = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(per.codperiodo) && c.codsetor == setor.codsetor);
           const totalSetor = sub.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
           dataPoints.push(totalSetor);
         }
@@ -983,8 +985,10 @@ function abrirModalFiltroSetores(){
     selectDate.innerHTML = '<option value="">Nenhuma data no evento</option>';
   } else {
     const dates = [];
-    let curr = new Date(ev.data_inicio + 'T00:00:00');
-    const end = new Date(ev.data_final + 'T00:00:00');
+    const inicioStr = ev.data_inicio.split('T')[0];
+    const finalStr = ev.data_final.split('T')[0];
+    let curr = new Date(inicioStr + 'T00:00:00');
+    const end = new Date(finalStr + 'T00:00:00');
     while(curr <= end){
       dates.push(curr.toISOString().split('T')[0]);
       curr.setDate(curr.getDate() + 1);
@@ -1015,7 +1019,7 @@ function gerarPdfSetores(selData, selPeriodo){
   const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
   const escalas = (db['escalas']||[]).filter(es => {
     if(evId && es.codevento != evId) return false;
-    if(es.data !== selData) return false;
+    if(es.data.split('T')[0] !== selData) return false;
     if(es.codperiodo && String(es.codperiodo) !== String(selPeriodo)) return false;
     return true;
   });
@@ -1090,14 +1094,16 @@ function gerarPdfistencia(){
 
   const diasUnicos = [];
   if(eventoObj && eventoObj.data_inicio && eventoObj.data_final){
-    let curr = new Date(eventoObj.data_inicio + 'T00:00:00');
-    const end = new Date(eventoObj.data_final + 'T00:00:00');
+    const inicioStr = eventoObj.data_inicio.split('T')[0];
+    const finalStr = eventoObj.data_final.split('T')[0];
+    let curr = new Date(inicioStr + 'T00:00:00');
+    const end = new Date(finalStr + 'T00:00:00');
     while(curr <= end){
       diasUnicos.push(curr.toISOString().split('T')[0]);
       curr.setDate(curr.getDate() + 1);
     }
   } else {
-    const setDatas = new Set([...parametros.map(p => p.datacont), ...contagens.map(c => c.data)]);
+    const setDatas = new Set([...parametros.map(p => p.datacont.split('T')[0]), ...contagens.map(c => c.data.split('T')[0])]);
     diasUnicos.push(...[...setDatas].sort());
   }
 
@@ -1106,12 +1112,12 @@ function gerarPdfistencia(){
   
   diasUnicos.forEach((dia, index) => {
     const diaLabel = labelsDias[index] || `${index+1}º DIA`;
-    const paramsDoDia = parametros.filter(p => p.datacont === dia);
+    const paramsDoDia = parametros.filter(p => p.datacont.split('T')[0] === dia);
 
     if(paramsDoDia.length > 0){
       paramsDoDia.forEach((param, pIdx) => {
         const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
-        const contsDoParam = contagens.filter(c => c.data === dia && String(c.codperiodo) === String(param.codperiodo));
+        const contsDoParam = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(param.codperiodo));
         const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
 
         bodyRows.push([
@@ -1188,7 +1194,7 @@ function renderDesignacoes(){
 
   let escalasFiltradas = escalas;
   if (designacaoDataFilter) {
-    escalasFiltradas = escalasFiltradas.filter(es => es.data === designacaoDataFilter);
+    escalasFiltradas = escalasFiltradas.filter(es => es.data.split('T')[0] === designacaoDataFilter);
   }
 
   const searchQuery = (window._designacaoSearchPessoa || '').toLowerCase();
@@ -1233,8 +1239,10 @@ function renderDesignacoes(){
   const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
   let dateOptionsHtml = '<option value="">Todas as Datas</option>';
   if(ev && ev.data_inicio && ev.data_final){
-    let curr = new Date(ev.data_inicio + 'T00:00:00');
-    const end = new Date(ev.data_final + 'T00:00:00');
+    const inicioStr = ev.data_inicio.split('T')[0];
+    const finalStr = ev.data_final.split('T')[0];
+    let curr = new Date(inicioStr + 'T00:00:00');
+    const end = new Date(finalStr + 'T00:00:00');
     while(curr <= end){
       const dStr = curr.toISOString().split('T')[0];
       dateOptionsHtml += `<option value="${dStr}" ${dStr===designacaoDataFilter?'selected':''}>${formatDateBR(dStr)}</option>`;
@@ -1522,9 +1530,9 @@ function openEntityModal(key, id){
 
       if(key === 'contagem' && f.name === 'data'){
         const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
-        const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont))].sort();
+        const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont.split('T')[0]))].sort();
         
-        let dateOpts = '<option value="">Selecione uma data liberada…</option>' + datasAtivas.map(d => `<option value="${d}" ${val === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
+        let dateOpts = '<option value="">Selecione uma data liberada…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
         control = `<select data-field="${f.name}" class="${base}">${dateOpts}</select>`;
       } else {
         control = `<input type="date" data-field="${f.name}" value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
