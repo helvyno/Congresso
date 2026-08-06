@@ -43,7 +43,7 @@
       <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] text-slate-600 dark:text-[#94a3b8] hover:text-slate-900 dark:hover:text-white transition-colors" title="Ocultar/Exibir Menu">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
-      <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-200 dark:border-[#334155] bg-white flex-shrink-0">
+      <div class="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">DS</div>
       <div>
         <h1 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Indicadores</h1>
         <p class="text-xs text-slate-500 dark:text-[#94a3b8] hidden sm:block">DATASABE Sistemas</p>
@@ -58,7 +58,6 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <!-- Botão de Alternância de Tema (Sempre visível antes do status) -->
       <button onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] text-slate-600 dark:text-[#94a3b8] hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium" title="Alternar Tema Claro/Escuro">
         <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
         <svg class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -140,7 +139,6 @@ let chartInstanceRep1 = null;
 let chartInstanceRep2 = null;
 let chartInstanceRep3 = null;
 
-// Função para alternar o tema do site
 function toggleTheme() {
   const htmlEl = document.documentElement;
   if (htmlEl.classList.contains('dark')) {
@@ -155,7 +153,6 @@ function toggleTheme() {
   renderCurrentTab();
 }
 
-// Carregar tema salvo anteriormente
 (function() {
   const savedTheme = localStorage.getItem('theme') || 'light';
   document.documentElement.classList.remove('light', 'dark');
