@@ -1103,7 +1103,10 @@ function gerarPdfistencia(){
       curr.setDate(curr.getDate() + 1);
     }
   } else {
-    const setDatas = new Set([...parametros.map(p => p.datacont.split('T')[0]), ...contagens.map(c => c.data.split('T')[0])]);
+    const setDatas = new Set([
+      ...parametros.map(p => p.datacont ? p.datacont.split('T')[0] : ''), 
+      ...contagens.map(c => c.data ? c.data.split('T')[0] : '')
+    ].filter(Boolean));
     diasUnicos.push(...[...setDatas].sort());
   }
 
@@ -1112,12 +1115,12 @@ function gerarPdfistencia(){
   
   diasUnicos.forEach((dia, index) => {
     const diaLabel = labelsDias[index] || `${index+1}º DIA`;
-    const paramsDoDia = parametros.filter(p => p.datacont.split('T')[0] === dia);
+    const paramsDoDia = parametros.filter(p => p.datacont && p.datacont.split('T')[0] === dia);
 
     if(paramsDoDia.length > 0){
       paramsDoDia.forEach((param, pIdx) => {
         const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
-        const contsDoParam = contagens.filter(c => c.data.split('T')[0] === dia && String(c.codperiodo) === String(param.codperiodo));
+        const contsDoParam = contagens.filter(c => c.data && c.data.split('T')[0] === dia && String(c.codperiodo) === String(param.codperiodo));
         const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
 
         bodyRows.push([
@@ -1411,6 +1414,23 @@ function renderTable(key){
 
   if(!ent.isGlobal && key !== 'evento'){
     rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
+  }
+
+  // Ordenação específica para Contagens: por Data, Período e Setor
+  if (key === 'contagem') {
+    rows.sort((a, b) => {
+      const dataA = (a.data || '').split('T')[0];
+      const dataB = (b.data || '').split('T')[0];
+      if (dataA !== dataB) return dataA.localeCompare(dataB);
+
+      const perDescA = refRelationDescricao('periodo', a.codperiodo);
+      const perDescB = refRelationDescricao('periodo', b.codperiodo);
+      if (perDescA !== perDescB) return perDescA.localeCompare(perDescB);
+
+      const setorA = refRelationDescricao('setor', a.codsetor);
+      const setorB = refRelationDescricao('setor', b.codsetor);
+      return setorA.localeCompare(setorB);
+    });
   }
 
   if(ent._search){
