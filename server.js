@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -6,12 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Configuração da conexão com o banco de dados (Neon / PostgreSQL)
+// Configuração da conexão com o banco de dados (Neon / PostgreSQL) com SSL e dotenv
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL // Insira sua string de conexão aqui
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-// 1. Script para criar/atualizar as tabelas e colunas necessárias no banco de dados
 async function initDB() {
   const client = await pool.connect();
   try {
@@ -41,7 +42,6 @@ async function initDB() {
         descricao TEXT NOT NULL
       );
 
-      -- Tabela Período atualizada com horário inicial e final
       CREATE TABLE IF NOT EXISTS periodo (
         codperiodo SERIAL PRIMARY KEY,
         descricao TEXT NOT NULL,
@@ -67,7 +67,6 @@ async function initDB() {
         codcong INT REFERENCES congregacao(codcong)
       );
 
-      -- Tabela Escalas atualizada com o campo codperiodo
       CREATE TABLE IF NOT EXISTS escalas (
         codescala SERIAL PRIMARY KEY,
         codevento INT REFERENCES evento(codevento) ON DELETE CASCADE,
@@ -111,12 +110,10 @@ async function initDB() {
   }
 }
 
-// Health Check
 app.get('/api/health/check', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Rotas genéricas de API para as entidades
 const entities = ['evento', 'setor', 'congregacao', 'privilegio', 'periodo', 'parametros', 'pessoa', 'escalas', 'contagem', 'usuario', 'configmapa'];
 
 entities.forEach(table => {
@@ -135,7 +132,6 @@ entities.forEach(table => {
   };
   const pk = pkMap[table];
 
-  // Listar
   app.get(`/api/${table}`, async (req, res) => {
     try {
       const result = await pool.query(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
@@ -145,7 +141,6 @@ entities.forEach(table => {
     }
   });
 
-  // Criar
   app.post(`/api/${table}`, async (req, res) => {
     try {
       const keys = Object.keys(req.body);
@@ -162,7 +157,6 @@ entities.forEach(table => {
     }
   });
 
-  // Atualizar
   app.put(`/api/${table}/:id`, async (req, res) => {
     try {
       const id = req.params.id;
@@ -184,7 +178,6 @@ entities.forEach(table => {
     }
   });
 
-  // Excluir
   app.delete(`/api/${table}/:id`, async (req, res) => {
     try {
       const id = req.params.id;
@@ -199,7 +192,6 @@ entities.forEach(table => {
   });
 });
 
-// Rota específica para salvar o mapa do evento
 app.post('/api/configmapa/salvar', async (req, res) => {
   try {
     const { codevento, imagem_base64 } = req.body;
