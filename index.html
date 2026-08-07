@@ -55,9 +55,8 @@
         
         <div class="space-y-4">
           <div>
-            <label class="block text-xs font-medium text-slate-200 mb-1.5">Evento Ativo</label>
             <select id="welcome-evento-select" class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
-              <option value="">Carregando eventos...</option>
+              <option value="">Selecione o evento...</option>
             </select>
           </div>
           <button onclick="entrarNoSistema()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2">
@@ -276,14 +275,15 @@ const ENTITIES = [
     {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
     {name:'codperfil', label:'Perfil', type:'fk', ref:'perfil', required:true, defaultToIndicador:true},
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
-    {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true, filterByEvent:true, sortAlphabetically:true}
+    {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true, filterByEvent:true, sortAlphabetically:true},
+    {name:'disponibilidade', label:'Disponibilidade de Dias e Períodos', type:'disponibilidade', required:false}
   ]},
   { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
+    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, onEscalaDataPeriodoChange:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onEscalaDataPeriodoChange:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true, searchable:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
-    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onPeriodChange:true},
-    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
     {name:'hora_inicio', label:'Hora início', type:'time', required:true, readonly:true},
     {name:'hora_fim', label:'Hora fim', type:'time', required:true, readonly:true}
   ]},
@@ -382,7 +382,7 @@ async function checkDbStatus(){
 }
 
 async function loadDB(){
-  const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap);
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap), { key: 'pessoadisponibilidade' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -420,24 +420,26 @@ function initGlobalEvento(){
   }
 
   const optionsHtml = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
-  selectWelcome.innerHTML = optionsHtml;
+  selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + optionsHtml;
   selectHeader.innerHTML = optionsHtml;
 
-  if(!globalEventoId || !eventos.some(e => e.codevento == globalEventoId)){
+  if(!globalEventoId && eventos.length > 0){
     globalEventoId = eventos[0].codevento;
   }
-  selectWelcome.value = globalEventoId;
   selectHeader.value = globalEventoId;
   updateDashboardDateOptions();
 }
 
 function entrarNoSistema() {
   const selectWelcome = document.getElementById('welcome-evento-select');
-  if(selectWelcome && selectWelcome.value){
-    globalEventoId = Number(selectWelcome.value);
-    const selectHeader = document.getElementById('global-evento-filter');
-    if(selectHeader) selectHeader.value = globalEventoId;
+  if(!selectWelcome || !selectWelcome.value){
+    showToast('Selecione um evento para prosseguir.');
+    return;
   }
+  
+  globalEventoId = Number(selectWelcome.value);
+  const selectHeader = document.getElementById('global-evento-filter');
+  if(selectHeader) selectHeader.value = globalEventoId;
   
   const welcomeScreen = document.getElementById('welcome-screen');
   if(welcomeScreen){
@@ -565,7 +567,7 @@ function buildLayout(){
       return `<div id="tab-mapa" class="tab-content overflow-y-auto ${current==='mapa'?'active':''}"></div>`;
     }
 
-    const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group');
+    const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
 
     return `
       <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
@@ -615,7 +617,7 @@ async function showTab(key){
   if(sidebar) sidebar.classList.add('hidden');
 
   try {
-    const activeEntities = ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap);
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap), { key: 'pessoadisponibilidade' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -1690,7 +1692,7 @@ function renderTable(key){
   if(ent._search){
     const q = ent._search;
     rows = rows.filter(r=>{
-      return ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group').some(f=>{
+      return ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade').some(f=>{
         let v = f.type==='fk' ? refLabel(f.ref, r[f.name]) : r[f.name];
         if(f.type==='date') v = formatDateBR(v);
         return String(v||'').toLowerCase().includes(q);
@@ -1715,7 +1717,7 @@ function renderTable(key){
   emptyEl.classList.add('hidden');
 
   tbody.innerHTML = rows.map(r=>{
-    const tableFields = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group');
+    const tableFields = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
     const cells = tableFields.map(f=>{
       if(f.type==='fk'){
         return `<td class="px-6 py-4 text-slate-700">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-slate-400 font-mono text-xs">#${r[f.name]}</span></td>`;
@@ -1795,6 +1797,61 @@ function openEntityModal(key, id){
           </label>
         `).join('')}
       </div>`;
+    } else if(f.type === 'disponibilidade'){
+      let dispRecords = [];
+      if(record && record.codpessoa){
+        dispRecords = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(record.codpessoa));
+      }
+      
+      const eventDates = [];
+      if(ev && ev.data_inicio && ev.data_final){
+        let curr = new Date(ev.data_inicio.split('T')[0] + 'T00:00:00');
+        const end = new Date(ev.data_final.split('T')[0] + 'T00:00:00');
+        while(curr <= end){
+          eventDates.push(curr.toISOString().split('T')[0]);
+          curr.setDate(curr.getDate() + 1);
+        }
+      }
+
+      const periodosList = db['periodo'] || [];
+
+      let dispHtml = `
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 max-h-72 overflow-y-auto space-y-3 shadow-inner">
+          <label class="flex items-center gap-2 text-xs font-bold text-slate-900 pb-2 border-b border-slate-200 cursor-pointer">
+            <input type="checkbox" id="disp-select-all" onchange="toggleAllDisponibilidade(this)" class="w-4 h-4 accent-blue-600 rounded">
+            TODOS OS DIAS E PERÍODOS
+          </label>
+      `;
+
+      eventDates.forEach(dateStr => {
+        const isDayChecked = periodosList.length > 0 && periodosList.every(p => {
+          return dispRecords.some(d => d.data.split('T')[0] === dateStr && Number(d.codperiodo) === Number(p.codperiodo));
+        });
+
+        dispHtml += `
+          <div class="space-y-1.5 pt-1">
+            <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+              <input type="checkbox" data-disp-day="${dateStr}" onchange="toggleDayDisponibilidade(this, '${dateStr}')" ${isDayChecked ? 'checked' : ''} class="w-4 h-4 accent-blue-600 rounded">
+              ${formatDateBR(dateStr)}
+            </label>
+            <div class="pl-6 space-y-1">
+        `;
+
+        periodosList.forEach(per => {
+          const isPerChecked = dispRecords.some(d => d.data.split('T')[0] === dateStr && Number(d.codperiodo) === Number(per.codperiodo));
+          dispHtml += `
+            <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+              <input type="checkbox" data-disp-item="${dateStr}_${per.codperiodo}" data-date="${dateStr}" data-periodo="${per.codperiodo}" onchange="checkMasterDisponibilidade()" ${isPerChecked ? 'checked' : ''} class="w-4 h-4 accent-blue-600 rounded">
+              ${escapeHtml(per.descricao)}
+            </label>
+          `;
+        });
+
+        dispHtml += `</div></div>`;
+      });
+
+      dispHtml += `</div>`;
+      control = dispHtml;
     } else if(f.name === 'ativo' && key === 'parametros'){
       const isChecked = record ? (record.ativo === true || record.ativo === 'true') : true;
       control = `<div class="flex items-center gap-3 pt-1">
@@ -1818,7 +1875,32 @@ function openEntityModal(key, id){
         });
       }
 
-      const onChangeAttr = f.onPeriodChange ? 'onchange="onEscalaPeriodoChange(this.value)"' : '';
+      if (key === 'escalas' && f.name === 'codpessoa') {
+        const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
+        const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+        if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
+          const selData = dataEscalaEl.value;
+          const selPeriodo = Number(periodoEscalaEl.value);
+          const periodoObj = (db['periodo'] || []).find(p => Number(p.codperiodo) === selPeriodo);
+          const periodoDesc = periodoObj ? periodoObj.descricao.trim().toUpperCase() : '';
+
+          refList = refList.filter(p => {
+            const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
+            if (pDisp.length === 0) return false;
+            
+            const hasIntegral = pDisp.some(d => {
+              const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+              return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
+            });
+
+            if (hasIntegral) return true;
+
+            return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
+          });
+        }
+      }
+
+      const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
       const opts = refList.map(r=>{
         const rid = r[refEnt.pk];
         return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
@@ -1844,7 +1926,8 @@ function openEntityModal(key, id){
         let dateOpts = '<option value="">Selecione uma data cadastrada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
         control = `<select data-field="${f.name}" class="${base}">${dateOpts}</select>`;
       } else {
-        control = `<input type="date" data-field="${f.name}" value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
+        const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
+        control = `<input type="date" data-field="${f.name}" ${onChangeAttr} value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
       }
     } else if(f.type==='time'){
       const readonlyAttr = f.readonly ? 'readonly style="background-color: #f1f5f9; color: #64748b; cursor: not-allowed;"' : '';
@@ -1864,6 +1947,7 @@ function openEntityModal(key, id){
   }).join('');
 
   openModal('modal-form');
+  checkMasterDisponibilidade();
 
   if(key === 'escalas'){
     const initialPeriodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
@@ -1871,6 +1955,75 @@ function openEntityModal(key, id){
       onEscalaPeriodoChange(initialPeriodoEl.value);
     }
   }
+}
+
+function toggleAllDisponibilidade(masterCheckbox){
+  const checkboxes = document.querySelectorAll('#modal-form [data-disp-item], #modal-form [data-disp-day]');
+  checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+}
+
+function toggleDayDisponibilidade(dayCheckbox, dateStr){
+  const dayItems = document.querySelectorAll(`#modal-form [data-date="${dateStr}"]`);
+  dayItems.forEach(cb => cb.checked = dayCheckbox.checked);
+  checkMasterDisponibilidade();
+}
+
+function checkMasterDisponibilidade(){
+  const master = document.getElementById('disp-select-all');
+  if(!master) return;
+  const items = document.querySelectorAll('#modal-form [data-disp-item]');
+  if(items.length === 0){ master.checked = false; return; }
+  const allChecked = Array.from(items).every(cb => cb.checked);
+  master.checked = allChecked;
+
+  const days = document.querySelectorAll('#modal-form [data-disp-day]');
+  days.forEach(dayCb => {
+    const dStr = dayCb.getAttribute('data-disp-day');
+    const dayItems = document.querySelectorAll(`#modal-form [data-date="${dStr}"]`);
+    if(dayItems.length > 0){
+      dayCb.checked = Array.from(dayItems).every(cb => cb.checked);
+    }
+  });
+}
+
+function onEscalaDataPeriodoChange(){
+  const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+  if(periodoEscalaEl && periodoEscalaEl.value){
+    onEscalaPeriodoChange(periodoEscalaEl.value);
+  }
+
+  const pessoaSelect = document.querySelector('#modal-form [data-field="codpessoa"]');
+  const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
+  if(!pessoaSelect || !dataEscalaEl) return;
+
+  const selData = dataEscalaEl.value;
+  const selPeriodo = periodoEscalaEl ? Number(periodoEscalaEl.value) : null;
+  const evId = globalEventoId;
+  let refList = (db['pessoa'] || []).filter(p => !evId || p.codevento == evId);
+
+  if (selData && selPeriodo) {
+    refList = refList.filter(p => {
+      const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
+      if (pDisp.length === 0) return false;
+      
+      const hasIntegral = pDisp.some(d => {
+        const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+        return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
+      });
+
+      if (hasIntegral) return true;
+
+      return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
+    });
+  }
+
+  refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
+  const currentPessoaVal = pessoaSelect.value;
+  const opts = refList.map(r=>{
+    const rid = r['codpessoa'];
+    return `<option value="${rid}" ${currentPessoaVal == rid ? 'selected':''}>${escapeHtml(r.nomecompleto)} (#${rid})</option>`;
+  }).join('');
+  pessoaSelect.innerHTML = '<option value="">Selecione…</option>' + opts;
 }
 
 function onEscalaPeriodoChange(codPeriodo){
@@ -1899,6 +2052,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
   const eventoObj = (db['evento']||[]).find(e => Number(e.codevento) === Number(globalEventoId));
 
   ent.fields.forEach(f=>{
+    if(f.type === 'disponibilidade') return;
     const wrap = form.querySelector(`[data-field-wrap="${f.name}"]`);
     if(!wrap) return;
     const err = wrap.querySelector('.err-msg');
@@ -2000,6 +2154,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
   saveBtn.disabled = true; saveBtn.textContent = 'Salvando…';
 
   try{
+    let savedPessoaId = editingId;
     if(editingId!==null){
       const updated = await apiUpdate(key, editingId, values);
       const idx = db[key].findIndex(r=>r[ent.pk]===editingId);
@@ -2008,12 +2163,33 @@ document.getElementById('entity-form').addEventListener('submit', async function
     } else {
       const created = await apiCreate(key, values);
       db[key].push(created);
+      savedPessoaId = created[ent.pk];
       if(key === 'evento'){
         globalEventoId = created.codevento;
         initGlobalEvento();
       }
       showToast(`${ent.label} cadastrado!`);
     }
+
+    if(key === 'pessoa' && savedPessoaId){
+      const checkedDisp = form.querySelectorAll('#modal-form [data-disp-item]:checked');
+      const novasDisponibilidades = Array.from(checkedDisp).map(cb => ({
+        codpessoa: Number(savedPessoaId),
+        codevento: Number(globalEventoId),
+        data: cb.getAttribute('data-date'),
+        codperiodo: Number(cb.getAttribute('data-periodo'))
+      }));
+
+      await fetch(`${API_BASE}/api/pessoadisponibilidade/salvar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codpessoa: Number(savedPessoaId), disponibilidades: novasDisponibilidades })
+      });
+
+      const dispRes = await apiList('pessoadisponibilidade');
+      db['pessoadisponibilidade'] = dispRes;
+    }
+
     buildLayout();
     closeModal('modal-form');
   }catch(err){

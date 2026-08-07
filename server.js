@@ -49,6 +49,39 @@ app.post('/api/configmapa/salvar', async (req, res) => {
   }
 });
 
+// Rotas de Disponibilidade de Pessoas
+app.get('/api/pessoadisponibilidade', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM pessoadisponibilidade');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/pessoadisponibilidade/salvar', async (req, res) => {
+  const { codpessoa, disponibilidades } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM pessoadisponibilidade WHERE codpessoa = $1', [codpessoa]);
+    
+    for (const d of disponibilidades) {
+      await client.query(
+        'INSERT INTO pessoadisponibilidade (codpessoa, codevento, data, codperiodo) VALUES ($1, $2, $3, $4)',
+        [d.codpessoa, d.codevento, d.data, d.codperiodo]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ status: 'ok' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // Rotas genéricas para as demais tabelas do sistema
 const tables = [
   'evento', 'setor', 'congregacao', 'privilegio', 
