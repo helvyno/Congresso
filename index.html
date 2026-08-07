@@ -27,6 +27,53 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col">
 
+  <!-- TELA INICIAL (LANDING PAGE) -->
+  <div id="welcome-screen" class="fixed inset-0 z-[100] flex flex-col justify-between p-6 md:p-12 overflow-y-auto bg-slate-900 bg-cover bg-center" style="background-image: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.4)), url('fundo.jpg');">
+    <div class="flex items-center gap-3">
+      <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-700 bg-white">
+      <div>
+        <h1 class="text-white font-bold text-lg tracking-tight">DATASABE Sistemas</h1>
+        <p class="text-xs text-slate-300">Gestão de Indicadores</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center my-auto py-8">
+      <div class="space-y-6 text-white max-w-xl">
+        <h2 class="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
+          Gestão de Indicadores
+        </h2>
+        <p class="text-lg text-blue-200 font-medium">Assembleias e Congressos das Testemunhas de Jeová</p>
+        <div class="w-20 h-1 bg-blue-500 rounded-full"></div>
+        <p class="text-slate-200 text-base leading-relaxed">
+          Organização, orientação e apoio para que tudo contribua para um evento bem organizado e agradável para todos.
+        </p>
+      </div>
+
+      <div class="bg-white/10 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/20 shadow-2xl max-w-md w-full ml-auto mr-auto lg:mr-0">
+        <h3 class="text-xl font-bold text-white mb-2">Acessar o Sistema</h3>
+        <p class="text-xs text-slate-300 mb-6">Selecione o evento desejado para prosseguir:</p>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-200 mb-1.5">Evento Ativo</label>
+            <select id="welcome-evento-select" class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
+              <option value="">Carregando eventos...</option>
+            </select>
+          </div>
+          <button onclick="entrarNoSistema()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2">
+            <span>Entrar</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center text-xs text-slate-400">
+      &copy; 2026 DATASABE Sistemas. Todos os direitos reservados.
+    </div>
+  </div>
+
+  <!-- HEADER PRINCIPAL DO SISTEMA -->
   <header id="main-header" class="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-sm">
     <div class="flex items-center gap-3">
       <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors" title="Ocultar/Exibir Menu">
@@ -39,7 +86,7 @@
       </div>
     </div>
 
-    <div id="evento-filter-wrapper" class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+    <div id="evento-filter-wrapper" class="hidden items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
       <span class="text-xs text-slate-500 font-medium whitespace-nowrap">Evento Ativo:</span>
       <select id="global-evento-filter" onchange="changeGlobalEvento(this.value)" class="bg-transparent text-sm font-semibold text-blue-600 focus:outline-none cursor-pointer">
         <option value="">Carregando eventos...</option>
@@ -47,6 +94,10 @@
     </div>
 
     <div class="flex items-center gap-3">
+      <button onclick="voltarParaTelaInicial()" class="text-xs text-slate-600 hover:text-blue-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition-colors font-medium flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span>Trocar Evento</span>
+      </button>
       <span id="db-status" class="text-xs text-slate-500 flex items-center gap-1.5 whitespace-nowrap">
         <span class="w-2 h-2 rounded-full bg-slate-400"></span> verificando…
       </span>
@@ -356,19 +407,53 @@ async function loadDB(){
 
 function initGlobalEvento(){
   const eventos = db['evento'] || [];
-  const select = document.getElementById('global-evento-filter');
-  if(!select) return;
+  const selectWelcome = document.getElementById('welcome-evento-select');
+  const selectHeader = document.getElementById('global-evento-filter');
+  
+  if(!selectWelcome || !selectHeader) return;
+
   if(eventos.length === 0){
-    select.innerHTML = '<option value="">Nenhum evento cadastrado</option>';
+    selectWelcome.innerHTML = '<option value="">Nenhum evento cadastrado</option>';
+    selectHeader.innerHTML = '<option value="">Nenhum evento cadastrado</option>';
     globalEventoId = null;
     return;
   }
-  select.innerHTML = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
+
+  const optionsHtml = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
+  selectWelcome.innerHTML = optionsHtml;
+  selectHeader.innerHTML = optionsHtml;
+
   if(!globalEventoId || !eventos.some(e => e.codevento == globalEventoId)){
     globalEventoId = eventos[0].codevento;
   }
-  select.value = globalEventoId;
+  selectWelcome.value = globalEventoId;
+  selectHeader.value = globalEventoId;
   updateDashboardDateOptions();
+}
+
+function entrarNoSistema() {
+  const selectWelcome = document.getElementById('welcome-evento-select');
+  if(selectWelcome && selectWelcome.value){
+    globalEventoId = Number(selectWelcome.value);
+    const selectHeader = document.getElementById('global-evento-filter');
+    if(selectHeader) selectHeader.value = globalEventoId;
+  }
+  
+  const welcomeScreen = document.getElementById('welcome-screen');
+  if(welcomeScreen){
+    welcomeScreen.classList.add('hidden');
+  }
+  
+  updateDashboardDateOptions();
+  renderCurrentTab();
+  updateCounts();
+}
+
+function voltarParaTelaInicial() {
+  const welcomeScreen = document.getElementById('welcome-screen');
+  if(welcomeScreen){
+    welcomeScreen.classList.remove('hidden');
+  }
 }
 
 function updateDashboardDateOptions(){
@@ -413,6 +498,9 @@ function updateDashboardDateOptions(){
 
 function changeGlobalEvento(val){
   globalEventoId = val ? Number(val) : null;
+  const selectWelcome = document.getElementById('welcome-evento-select');
+  if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
+
   updateDashboardDateOptions();
   designacaoDataFilter = '';
   renderCurrentTab();
