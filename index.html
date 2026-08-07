@@ -262,7 +262,7 @@ const ENTITIES = [
     {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: Administrador'},
     {name:'permissoes', label:'Lista de Telas', type:'checkbox_group', required:false}
   ]},
-  { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, fields:[
+  { key:'parametros', label:'Parâmetros', plural:'Parâmetros', pk:'codparametro', display:r=>`${r.datacont} às ${r.horacont||'--:--'} (Ativo: ${r.ativo?'Sim':'Não'})`, isCustomParametros:true, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'datacont', label:'Data da Contagem', type:'date', required:true, limitToEvent:true},
     {name:'horacont', label:'Hora da Contagem', type:'time', required:false},
@@ -568,6 +568,57 @@ function buildLayout(){
     }
 
     const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
+
+    if (e.isCustomParametros) {
+      return `
+        <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+          <div class="flex-shrink-0 mb-4">
+            <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
+                <p class="text-slate-500 text-sm">Registros vinculados ao evento selecionado</p>
+              </div>
+              ${!isPublicView ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Novo ${e.label}
+              </button>` : ''}
+            </div>
+          </div>
+
+          <!-- BLOCO DE ATUALIZAÇÃO DO MAPA (COMO NO PRINT) -->
+          ${!isPublicView ? `
+            <div class="mb-6 bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm">
+              <div>
+                <h4 class="text-sm font-bold text-slate-900 mb-1">Atualizar Imagem do Mapa</h4>
+                <p class="text-xs text-slate-500">Selecione um arquivo de imagem (JPG ou PNG) do seu computador para definir o mapa deste evento.</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <input type="file" id="map-file-input" accept="image/*" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+                <button onclick="salvarNovoMapa()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">Salvar Imagem</button>
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="flex items-center gap-3 flex-wrap mb-3">
+            <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+              class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
+          </div>
+          <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+            <div class="flex-1 overflow-y-auto relative pb-16">
+              <table class="w-full text-sm border-collapse">
+                <thead class="sticky top-0 z-20 bg-slate-50">
+                  <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody id="tabela-${e.key}"></tbody>
+              </table>
+              <div id="empty-${e.key}" class="hidden text-center text-slate-400 text-sm py-12"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     return `
       <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
@@ -1519,31 +1570,15 @@ async function renderMapa(){
 
   const imgSrc = mapaRec && mapaRec.imagem_base64 ? mapaRec.imagem_base64 : '';
 
-  let uploadSection = '';
-  if (!isPublicView) {
-    uploadSection = `
-      <div class="mb-6 bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm">
-        <div>
-          <h4 class="text-sm font-bold text-slate-900 mb-1">Atualizar Imagem do Mapa</h4>
-          <p class="text-xs text-slate-500">Selecione um arquivo de imagem (JPG ou PNG) do seu computador para definir o mapa deste evento.</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <input type="file" id="map-file-input" accept="image/*" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
-          <button onclick="salvarNovoMapa()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">Salvar Imagem</button>
-        </div>
-      </div>
-    `;
-  }
-
   let contentHtml = '';
   if(imgSrc){
-    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[70vh] w-auto max-w-full rounded border border-slate-200 shadow-sm bg-white">`;
+    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[75vh] w-auto max-w-full rounded border border-slate-200 shadow-sm bg-white">`;
   } else {
     contentHtml = `
       <div class="text-center py-12">
         <svg class="w-12 h-12 mx-auto text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
         <p class="text-sm text-slate-600 font-medium">Nenhum mapa cadastrado para este evento.</p>
-        <p class="text-xs text-slate-400 mt-1">Utilize o botão acima para enviar a imagem do mapa.</p>
+        <p class="text-xs text-slate-400 mt-1">A imagem do mapa pode ser configurada no menu Parâmetros.</p>
       </div>`;
   }
 
@@ -1552,7 +1587,6 @@ async function renderMapa(){
       <h2 class="text-2xl font-bold text-slate-900 mb-1">Mapa do Evento</h2>
       <p class="text-slate-500 text-sm">Visualização detalhada do layout e setores do congresso</p>
     </div>
-    ${uploadSection}
     <div class="flex-1 bg-white border border-slate-200 rounded-xl p-6 flex justify-center items-center shadow-sm overflow-y-auto mb-6">
       ${contentHtml}
     </div>
@@ -1585,7 +1619,7 @@ async function salvarNovoMapa(){
       if(!response.ok) throw new Error(data.error || 'Erro ao salvar');
 
       showToast('Mapa atualizado com sucesso!');
-      renderMapa();
+      fileInput.value = '';
     } catch(err) {
       showToast('Erro ao salvar mapa: ' + err.message);
     }
@@ -2154,7 +2188,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
   saveBtn.disabled = true; saveBtn.textContent = 'Salvando…';
 
   try{
-    let savedPessoaId = editingId;
+    let savedRecordId = editingId;
     if(editingId!==null){
       const updated = await apiUpdate(key, editingId, values);
       const idx = db[key].findIndex(r=>r[ent.pk]===editingId);
@@ -2163,7 +2197,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
     } else {
       const created = await apiCreate(key, values);
       db[key].push(created);
-      savedPessoaId = created[ent.pk];
+      savedRecordId = created[ent.pk];
       if(key === 'evento'){
         globalEventoId = created.codevento;
         initGlobalEvento();
@@ -2171,10 +2205,10 @@ document.getElementById('entity-form').addEventListener('submit', async function
       showToast(`${ent.label} cadastrado!`);
     }
 
-    if(key === 'pessoa' && savedPessoaId){
+    if(key === 'pessoa' && savedRecordId){
       const checkedDisp = form.querySelectorAll('#modal-form [data-disp-item]:checked');
       const novasDisponibilidades = Array.from(checkedDisp).map(cb => ({
-        codpessoa: Number(savedPessoaId),
+        codpessoa: Number(savedRecordId),
         codevento: Number(globalEventoId),
         data: cb.getAttribute('data-date'),
         codperiodo: Number(cb.getAttribute('data-periodo'))
@@ -2183,7 +2217,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
       await fetch(`${API_BASE}/api/pessoadisponibilidade/salvar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codpessoa: Number(savedPessoaId), disponibilidades: novasDisponibilidades })
+        body: JSON.stringify({ codpessoa: Number(savedRecordId), disponibilidades: novasDisponibilidades })
       });
 
       const dispRes = await apiList('pessoadisponibilidade');
