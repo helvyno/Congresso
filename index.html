@@ -27,7 +27,7 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col">
 
-  <!-- TELA INICIAL (LANDING PAGE) -->
+  <!-- TELA INICIAL (LANDING PAGE) COM AUTENTICAÇÃO -->
   <div id="welcome-screen" class="fixed inset-0 z-[100] flex flex-col justify-between p-6 md:p-12 overflow-y-auto bg-slate-900 bg-cover bg-center" style="background-image: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.4)), url('fundo.jpg');">
     <div class="flex items-center gap-3">
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-700 bg-white">
@@ -55,14 +55,32 @@
         
         <div class="space-y-4">
           <div>
-            <select id="welcome-evento-select" class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
+            <select id="welcome-evento-select" onchange="onWelcomeEventoChange(this.value)" class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
               <option value="">Selecione o evento...</option>
             </select>
           </div>
-          <button onclick="entrarNoSistema()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2">
-            <span>Entrar</span>
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+
+          <!-- BOTÃO ENTRAR COMO INDICADOR -->
+          <button id="btn-entrar-indicador" onclick="entrarComoIndicador()" disabled class="w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed">
+            <span>Entrar como Indicador</span>
           </button>
+
+          <!-- BLOCO DE SENHA E ACESSO ADMINISTRADOR -->
+          <div class="pt-3 border-t border-white/10 space-y-3">
+            <div>
+              <label class="block text-xs text-slate-300 mb-1">Senha do Administrador do Evento:</label>
+              <input type="password" id="welcome-password" placeholder="Informe a senha apenas para administradores..." class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
+              <!-- MENSAGEM DE ERRO DE SENHA INTEGRADA NA TELA -->
+              <p id="password-error-msg" class="hidden text-xs text-red-400 mt-1.5 font-medium flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                Senha incorreta para este evento!
+              </p>
+            </div>
+            <button id="btn-entrar-admin" onclick="entrarComoAdministrador()" disabled class="w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed">
+              <span>Entrar como Administrador</span>
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -164,15 +182,23 @@
 
 <script>
 const API_BASE = 'https://congresso-5p1a.onrender.com';
-const urlParams = new URLSearchParams(window.location.search);
-const isPublicView = urlParams.get('view') === 'public';
 let sidebarOpen = false;
+let isPublicView = true;
 let chartInstance1 = null;
 let chartInstanceRep1 = null;
 let chartInstanceRep2 = null;
 let chartInstanceRep3 = null;
 let chartInstanceRep4 = null;
 let chartInstanceRep5 = null;
+
+let contagemDataFilter = 'ALL';
+let contagemPeriodoFilter = 'ALL';
+let designacaoDataFilter = 'ALL';
+let designacaoPeriodoFilter = 'ALL';
+let parametroDataFilter = 'ALL';
+let parametroPeriodoFilter = 'ALL';
+let escalaDataFilter = 'ALL';
+let escalaPeriodoFilter = 'ALL';
 
 function toggleSidebar(e) {
   if (e) e.stopPropagation();
@@ -241,9 +267,10 @@ const ENTITIES = [
   { key:'evento', label:'Evento', plural:'Eventos', pk:'codevento', display:r=>r.descricao, fields:[
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Congresso Regional 2026'},
     {name:'data_inicio', label:'Data início', type:'date', required:true},
-    {name:'data_final', label:'Data final', type:'date', required:true}
+    {name:'data_final', label:'Data final', type:'date', required:true},
+    {name:'senha', label:'Senha do Evento (Admin)', type:'text', required:false, placeholder:'Senha de acesso administrativo'}
   ]},
-  { key:'setor', label:'Setor', plural:'Setores', pk:'codsetor', display:r=>r.descricao, fields:[
+  { key:'setor', label:'Setor', plural:'Setores', pk:'codsetor', isCustomSetor:true, display:r=>r.descricao, fields:[
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Portaria Principal'},
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'numass', label:'NÚMERO DE ASSENTOS', type:'number', required:false, placeholder:'Ex.: 150'}
@@ -271,7 +298,7 @@ const ENTITIES = [
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
     {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
   ]},
-  { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', display:r=>r.nomecompleto, fields:[
+  { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', isCustomPessoa:true, display:r=>r.nomecompleto, fields:[
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
     {name:'telefone', label:'Telefone (11 números, ex: 34988887777)', type:'phone', required:true, placeholder:'34988887777'},
     {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
@@ -280,7 +307,7 @@ const ENTITIES = [
     {name:'codcong', label:'Congregação', type:'fk', ref:'congregacao', required:true, filterByEvent:true, sortAlphabetically:true},
     {name:'disponibilidade', label:'Disponibilidade de Dias e Períodos', type:'disponibilidade', required:false}
   ]},
-  { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
+  { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', isCustomEscalas:true, display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, onEscalaDataPeriodoChange:true},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onEscalaDataPeriodoChange:true},
@@ -289,10 +316,10 @@ const ENTITIES = [
     {name:'hora_inicio', label:'Hora início', type:'time', required:true, readonly:true},
     {name:'hora_fim', label:'Hora fim', type:'time', required:true, readonly:true}
   ]},
-  { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', display:r=>String(r.quantidade), fields:[
+  { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', isCustomContagem:true, display:r=>String(r.quantidade), fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
-    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true},
-    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
+    {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true, onContagemDataChange:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onContagemPeriodoChange:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true},
     {name:'quantidade', label:'Quantidade', type:'number', required:true, placeholder:'0'}
@@ -312,7 +339,6 @@ let dashboardDataFilter = 'ALL';
 let dashboardPeriodoFilter = 'ALL';
 let relatorioDataFilter = 'ALL';
 let relatorioPeriodoFilter = 'ALL';
-let designacaoDataFilter = '';
 let modalState = { key:null, editingId:null };
 
 function formatDateBR(dateStr) {
@@ -383,6 +409,47 @@ async function checkDbStatus(){
   }
 }
 
+async function loadDBForLogin(){
+  try {
+    const eventos = await apiList('evento');
+    db['evento'] = eventos;
+    const selectWelcome = document.getElementById('welcome-evento-select');
+    if(selectWelcome && eventos.length > 0){
+      selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
+    }
+  } catch(err) {
+    console.error("Erro ao carregar eventos para login:", err);
+  }
+  checkDbStatus();
+  onWelcomeEventoChange('');
+}
+
+function onWelcomeEventoChange(val){
+  const btnIndicador = document.getElementById('btn-entrar-indicador');
+  const btnAdmin = document.getElementById('btn-entrar-admin');
+  const passwordError = document.getElementById('password-error-msg');
+  const passwordInput = document.getElementById('welcome-password');
+  
+  if(passwordError) passwordError.classList.add('hidden');
+  if(passwordInput) passwordInput.classList.remove('field-error');
+
+  if(!btnIndicador || !btnAdmin) return;
+
+  if(val && val !== ""){
+    btnIndicador.disabled = false;
+    btnIndicador.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer";
+    
+    btnAdmin.disabled = false;
+    btnAdmin.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer";
+  } else {
+    btnIndicador.disabled = true;
+    btnIndicador.className = "w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed";
+    
+    btnAdmin.disabled = true;
+    btnAdmin.className = "w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed";
+  }
+}
+
 async function loadDB(){
   const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap), { key: 'pessoadisponibilidade' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
@@ -407,32 +474,57 @@ async function loadDB(){
   checkDbStatus();
 }
 
+async function atualizarBancoDashboard() {
+  try {
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap), { key: 'pessoadisponibilidade' }];
+    const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
+    let hasError = false;
+
+    activeEntities.forEach((e, idx) => {
+      const res = results[idx];
+      if (res.status === 'fulfilled') {
+        db[e.key] = res.value;
+      } else {
+        db[e.key] = [];
+        hasError = true;
+      }
+    });
+
+    if (hasError) {
+      showToast('Atenção: Alguma tabela não pôde ser atualizada.');
+    } else {
+      showToast('Dados atualizados com sucesso!');
+    }
+
+    renderCurrentTab();
+    updateCounts();
+    checkDbStatus();
+  } catch(err) {
+    showToast('Erro ao atualizar dados: ' + err.message);
+  }
+}
+
 function initGlobalEvento(){
   const eventos = db['evento'] || [];
   const selectWelcome = document.getElementById('welcome-evento-select');
   const selectHeader = document.getElementById('global-evento-filter');
   
-  if(!selectWelcome || !selectHeader) return;
-
-  if(eventos.length === 0){
-    selectWelcome.innerHTML = '<option value="">Nenhum evento cadastrado</option>';
-    selectHeader.innerHTML = '<option value="">Nenhum evento cadastrado</option>';
-    globalEventoId = null;
-    return;
-  }
+  if(!selectHeader) return;
 
   const optionsHtml = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
-  selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + optionsHtml;
+  if(selectWelcome) selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + optionsHtml;
   selectHeader.innerHTML = optionsHtml;
 
   if(!globalEventoId && eventos.length > 0){
     globalEventoId = eventos[0].codevento;
   }
   selectHeader.value = globalEventoId;
+  if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
+  onWelcomeEventoChange(globalEventoId);
   updateDashboardDateOptions();
 }
 
-function entrarNoSistema() {
+async function entrarComoIndicador() {
   const selectWelcome = document.getElementById('welcome-evento-select');
   if(!selectWelcome || !selectWelcome.value){
     showToast('Selecione um evento para prosseguir.');
@@ -440,40 +532,93 @@ function entrarNoSistema() {
   }
   
   globalEventoId = Number(selectWelcome.value);
-  const selectHeader = document.getElementById('global-evento-filter');
-  if(selectHeader) selectHeader.value = globalEventoId;
+  isPublicView = true;
   
   const welcomeScreen = document.getElementById('welcome-screen');
-  if(welcomeScreen){
-    welcomeScreen.classList.add('hidden');
+  if(welcomeScreen) welcomeScreen.classList.add('hidden');
+  
+  await loadDB();
+}
+
+async function entrarComoAdministrador() {
+  const selectWelcome = document.getElementById('welcome-evento-select');
+  const passwordInput = document.getElementById('welcome-password');
+  const passwordError = document.getElementById('password-error-msg');
+
+  if(passwordError) passwordError.classList.add('hidden');
+  if(passwordInput) passwordInput.classList.remove('field-error');
+  
+  if(!selectWelcome || !selectWelcome.value){
+    showToast('Selecione um evento para prosseguir.');
+    return;
   }
   
-  updateDashboardDateOptions();
-  renderCurrentTab();
-  updateCounts();
+  globalEventoId = Number(selectWelcome.value);
+  const senhaDigitada = passwordInput ? passwordInput.value.trim() : '';
+
+  try {
+    let eventos = db['evento'];
+    if(!eventos || eventos.length === 0) {
+      eventos = await apiList('evento');
+      db['evento'] = eventos;
+    }
+
+    const eventoObj = eventos.find(e => Number(e.codevento) === Number(globalEventoId));
+
+    if (!eventoObj) {
+      showToast('Evento não encontrado.');
+      return;
+    }
+
+    const senhaCadastrada = eventoObj.senha !== null && eventoObj.senha !== undefined ? String(eventoObj.senha).trim() : '';
+
+    if (senhaCadastrada !== '' && senhaCadastrada !== senhaDigitada) {
+      if(passwordError) passwordError.classList.remove('hidden');
+      if(passwordInput) passwordInput.classList.add('field-error');
+      showToast('Senha incorreta!');
+      return;
+    }
+
+    isPublicView = false;
+    const welcomeScreen = document.getElementById('welcome-screen');
+    if(welcomeScreen) welcomeScreen.classList.add('hidden');
+    
+    await loadDB();
+  } catch(err) {
+    showToast('Erro ao validar senha: ' + err.message);
+  }
 }
 
 function voltarParaTelaInicial() {
   const welcomeScreen = document.getElementById('welcome-screen');
-  if(welcomeScreen){
-    welcomeScreen.classList.remove('hidden');
+  const passwordInput = document.getElementById('welcome-password');
+  const passwordError = document.getElementById('password-error-msg');
+  if(passwordInput) {
+    passwordInput.value = '';
+    passwordInput.classList.remove('field-error');
   }
+  if(passwordError) passwordError.classList.add('hidden');
+  if(welcomeScreen) welcomeScreen.classList.remove('hidden');
+  loadDBForLogin();
 }
 
 function updateDashboardDateOptions(){
   const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
   const selectDate = document.getElementById('dashboard-date-filter');
   const selectRepDate = document.getElementById('relatorio-date-filter');
+  const selectContDate = document.getElementById('contagem-date-filter');
+  const selectDesDate = document.getElementById('designacao-date-filter');
+  const selectParamDate = document.getElementById('parametro-date-filter');
+  const selectEscDate = document.getElementById('escala-date-filter');
 
   if(!ev || !ev.data_inicio || !ev.data_final){
-    if(selectDate){
-      selectDate.innerHTML = '<option value="ALL">Todas as Datas</option>';
-      dashboardDataFilter = 'ALL';
-    }
-    if(selectRepDate){
-      selectRepDate.innerHTML = '<option value="ALL">Todas as Datas</option>';
-      relatorioDataFilter = 'ALL';
-    }
+    const defaultHtml = '<option value="ALL">Todas as Datas</option>';
+    if(selectDate) { selectDate.innerHTML = defaultHtml; dashboardDataFilter = 'ALL'; }
+    if(selectRepDate) { selectRepDate.innerHTML = defaultHtml; relatorioDataFilter = 'ALL'; }
+    if(selectContDate) { selectContDate.innerHTML = defaultHtml; contagemDataFilter = 'ALL'; }
+    if(selectDesDate) { selectDesDate.innerHTML = defaultHtml; designacaoDataFilter = 'ALL'; }
+    if(selectParamDate) { selectParamDate.innerHTML = defaultHtml; parametroDataFilter = 'ALL'; }
+    if(selectEscDate) { selectEscDate.innerHTML = defaultHtml; escalaDataFilter = 'ALL'; }
     return;
   }
 
@@ -490,14 +635,12 @@ function updateDashboardDateOptions(){
   let html = '<option value="ALL">Todas as Datas</option>';
   html += dates.map(d => `<option value="${d}">${formatDateBR(d)}</option>`).join('');
   
-  if(selectDate){
-    selectDate.innerHTML = html;
-    selectDate.value = dashboardDataFilter;
-  }
-  if(selectRepDate){
-    selectRepDate.innerHTML = html;
-    selectRepDate.value = relatorioDataFilter;
-  }
+  if(selectDate){ selectDate.innerHTML = html; selectDate.value = dashboardDataFilter; }
+  if(selectRepDate){ selectRepDate.innerHTML = html; selectRepDate.value = relatorioDataFilter; }
+  if(selectContDate){ selectContDate.innerHTML = html; selectContDate.value = contagemDataFilter; }
+  if(selectDesDate){ selectDesDate.innerHTML = html; selectDesDate.value = designacaoDataFilter; }
+  if(selectParamDate){ selectParamDate.innerHTML = html; selectParamDate.value = parametroDataFilter; }
+  if(selectEscDate){ selectEscDate.innerHTML = html; selectEscDate.value = escalaDataFilter; }
 }
 
 function changeGlobalEvento(val){
@@ -506,35 +649,26 @@ function changeGlobalEvento(val){
   if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
 
   updateDashboardDateOptions();
-  designacaoDataFilter = '';
   renderCurrentTab();
   updateCounts();
 }
 
-function changeDashboardDate(val){
-  dashboardDataFilter = val;
-  renderDashboard();
-}
+function changeDashboardDate(val){ dashboardDataFilter = val; renderDashboard(); }
+function changeDashboardPeriodo(val){ dashboardPeriodoFilter = val; renderDashboard(); }
+function changeRelatorioDate(val){ relatorioDataFilter = val; renderRelatorios(); }
+function changeRelatorioPeriodo(val){ relatorioPeriodoFilter = val; renderRelatorios(); }
 
-function changeDashboardPeriodo(val){
-  dashboardPeriodoFilter = val;
-  renderDashboard();
-}
+function changeContagemDate(val){ contagemDataFilter = val; renderTable('contagem'); }
+function changeContagemPeriodo(val){ contagemPeriodoFilter = val; renderTable('contagem'); }
 
-function changeRelatorioDate(val){
-  relatorioDataFilter = val;
-  renderRelatorios();
-}
+function changeDesignacaoDate(val){ designacaoDataFilter = val; renderDesignacoes(); }
+function changeDesignacaoPeriodo(val){ designacaoPeriodoFilter = val; renderDesignacoes(); }
 
-function changeRelatorioPeriodo(val){
-  relatorioPeriodoFilter = val;
-  renderRelatorios();
-}
+function changeParametroDate(val){ parametroDataFilter = val; renderTable('parametros'); }
+function changeParametroPeriodo(val){ parametroPeriodoFilter = val; renderTable('parametros'); }
 
-function changeDesignacaoDate(val){
-  designacaoDataFilter = val;
-  renderDesignacoes();
-}
+function changeEscalaDate(val){ escalaDataFilter = val; renderTable('escalas'); }
+function changeEscalaPeriodo(val){ escalaPeriodoFilter = val; renderTable('escalas'); }
 
 function buildLayout(){
   const nav = document.getElementById('nav');
@@ -570,6 +704,50 @@ function buildLayout(){
     }
 
     const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
+    const periodos = db['periodo'] || [];
+    const periodosOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
+
+    if (e.isCustomSetor) {
+      return `
+        <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+          <div class="flex-shrink-0 mb-4">
+            <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
+                <p class="text-slate-500 text-sm">Registros vinculados ao evento selecionado</p>
+              </div>
+              <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  <span>Atualizar Dados</span>
+                </button>
+                ${!isPublicView ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                  Novo ${e.label}
+                </button>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+                class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
+            </div>
+          </div>
+          <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+            <div class="flex-1 overflow-y-auto relative pb-16">
+              <table class="w-full text-sm border-collapse">
+                <thead class="sticky top-0 z-20 bg-slate-50">
+                  <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody id="tabela-${e.key}"></tbody>
+              </table>
+              <div id="empty-${e.key}" class="hidden text-center text-slate-400 text-sm py-12"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     if (e.isCustomParametros) {
       return `
@@ -580,14 +758,33 @@ function buildLayout(){
                 <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
                 <p class="text-slate-500 text-sm">Registros vinculados ao evento selecionado</p>
               </div>
-              ${!isPublicView ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                Novo ${e.label}
-              </button>` : ''}
+              <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  <span>Atualizar Dados</span>
+                </button>
+
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                  <span class="text-xs text-slate-500 font-medium">Data:</span>
+                  <select id="parametro-date-filter" onchange="changeParametroDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                    <option value="ALL">Todas as Datas</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                  <span class="text-xs text-slate-500 font-medium">Período:</span>
+                  <select id="parametro-periodo-filter" onchange="changeParametroPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                    ${periodosOptionsHtml}
+                  </select>
+                </div>
+
+                ${!isPublicView ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                  Novo ${e.label}
+                </button>` : ''}
+              </div>
             </div>
           </div>
 
-          <!-- BLOCO DE ATUALIZAÇÃO DO MAPA -->
           ${!isPublicView ? `
             <div class="mb-6 bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm">
               <div>
@@ -610,7 +807,161 @@ function buildLayout(){
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody id="tabela-${e.key}"></tbody>
+              </table>
+              <div id="empty-${e.key}" class="hidden text-center text-slate-400 text-sm py-12"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (e.isCustomPessoa) {
+      return `
+        <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+          <div class="flex-shrink-0 mb-4">
+            <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
+                <p class="text-slate-500 text-sm">Registros vinculados ao evento selecionado</p>
+              </div>
+              <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  <span>Atualizar Dados</span>
+                </button>
+                ${!isPublicView ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                  Novo ${e.label}
+                </button>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+                class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
+            </div>
+          </div>
+          <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+            <div class="flex-1 overflow-y-auto relative pb-16">
+              <table class="w-full text-sm border-collapse">
+                <thead class="sticky top-0 z-20 bg-slate-50">
+                  <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody id="tabela-${e.key}"></tbody>
+              </table>
+              <div id="empty-${e.key}" class="hidden text-center text-slate-400 text-sm py-12"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (e.isCustomEscalas) {
+      return `
+        <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+          <div class="flex-shrink-0 mb-4">
+            <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
+                <p class="text-slate-500 text-sm">Registros vinculados ao evento selecionado</p>
+              </div>
+              <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  <span>Atualizar Dados</span>
+                </button>
+
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                  <span class="text-xs text-slate-500 font-medium">Data:</span>
+                  <select id="escala-date-filter" onchange="changeEscalaDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                    <option value="ALL">Todas as Datas</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                  <span class="text-xs text-slate-500 font-medium">Período:</span>
+                  <select id="escala-periodo-filter" onchange="changeEscalaPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                    ${periodosOptionsHtml}
+                  </select>
+                </div>
+
+                ${!isPublicView ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                  Novo ${e.label}
+                </button>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+                class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
+            </div>
+          </div>
+          <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+            <div class="flex-1 overflow-y-auto relative pb-16">
+              <table class="w-full text-sm border-collapse">
+                <thead class="sticky top-0 z-20 bg-slate-50">
+                  <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody id="tabela-${e.key}"></tbody>
+              </table>
+              <div id="empty-${e.key}" class="hidden text-center text-slate-400 text-sm py-12"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (e.isCustomContagem) {
+      return `
+        <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+          <div class="flex-shrink-0 mb-4">
+            <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
+                <p class="text-slate-500 text-sm">Registros de contagem vinculados ao evento selecionado</p>
+              </div>
+              <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  <span>Atualizar Dados</span>
+                </button>
+
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                  <span class="text-xs text-slate-500 font-medium">Data:</span>
+                  <select id="contagem-date-filter" onchange="changeContagemDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                    <option value="ALL">Todas as Datas</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                  <span class="text-xs text-slate-500 font-medium">Período:</span>
+                  <select id="contagem-periodo-filter" onchange="changeContagemPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                    ${periodosOptionsHtml}
+                  </select>
+                </div>
+
+                ${(!isPublicView || e.key === 'contagem') ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                  Novo ${e.label}
+                </button>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
+                class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
+            </div>
+          </div>
+          <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+            <div class="flex-1 overflow-y-auto relative pb-16">
+              <table class="w-full text-sm border-collapse">
+                <thead class="sticky top-0 z-20 bg-slate-50">
+                  <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView || e.key === 'contagem' ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
                   </tr>
                 </thead>
                 <tbody id="tabela-${e.key}"></tbody>
@@ -628,12 +979,12 @@ function buildLayout(){
           <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
             <div>
               <h2 class="text-2xl font-bold text-slate-900 mb-1">${e.plural}</h2>
-              <p class="text-slate-500 text-sm">${e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado'}</p>
+              <p class="text-slate-500 text-sm">${e.key === 'evento' ? 'Dados do evento logado no sistema' : (e.isGlobal ? 'Tabela global (compartilhada entre todos os eventos)' : 'Registros vinculados ao evento selecionado')}</p>
             </div>
-            ${(!isPublicView || (e.key === 'contagem')) ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+            ${(!isPublicView || e.key === 'contagem') ? (e.key !== 'evento' ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
               Novo ${e.label}
-            </button>` : `<button onclick="openEntityModal('evento')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">Novo Evento</button>`) : ''}
+            </button>` : (!isPublicView ? `<button onclick="openEntityModal('evento')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">Novo Evento</button>` : '')) : ''}
           </div>
           <div class="flex items-center gap-3 flex-wrap">
             <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
@@ -645,7 +996,7 @@ function buildLayout(){
             <table class="w-full text-sm border-collapse">
               <thead class="sticky top-0 z-20 bg-slate-50">
                 <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView || (e.key === 'contagem' && !isPublicView) ? '' : null)].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                  ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView || e.key === 'contagem' ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
                 </tr>
               </thead>
               <tbody id="tabela-${e.key}"></tbody>
@@ -657,6 +1008,7 @@ function buildLayout(){
     `;
   }).join('');
 
+  if (isPublicView && current === 'relatorios') current = 'home';
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap).forEach(e=>{ e._search=''; });
   renderCurrentTab();
   updateCounts();
@@ -757,6 +1109,11 @@ function renderDashboard(){
         <p class="text-slate-500 text-sm">Resumo estatístico e contagens por data e período cadastrado</p>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
+        <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>Atualizar Dados</span>
+        </button>
+
         <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
           <span class="text-xs text-slate-500 font-medium">Data:</span>
           <select id="dashboard-date-filter" onchange="changeDashboardDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
@@ -919,9 +1276,17 @@ function renderRelatorios(){
   let periodoOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodosParametros.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(relatorioPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
 
   tabRep.innerHTML = `
-    <div class="mb-6">
-      <h2 class="text-2xl font-bold text-slate-900 mb-1">Relatórios e Gráficos</h2>
-      <p class="text-slate-500 text-sm">Geração dos cartões oficiais do congresso e gráficos analíticos</p>
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-2xl font-bold text-slate-900 mb-1">Relatórios e Gráficos</h2>
+        <p class="text-slate-500 text-sm">Geração dos cartões oficiais do congresso e gráficos analíticos</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>Atualizar Dados</span>
+        </button>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -1003,7 +1368,6 @@ function renderRelatorios(){
       </div>
     </div>
 
-    <!-- NOVO GRÁFICO: INDICADORES POR CONGREGAÇÃO E CAPITÃO (HORIZONTAL) -->
     <div class="bg-white border border-slate-200 rounded-xl p-6 mb-6 shadow-sm pb-12">
       <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Indicadores por Congregação e Capitão</h3>
       <div class="relative w-full h-[500px]">
@@ -1107,7 +1471,6 @@ function renderRelatorioCharts(contagens, periodosParametros, setores, congs, pe
   });
   const backgroundColors4 = labels4.map((_, idx) => palette[idx % palette.length]);
 
-  // Lógica para o novo gráfico 5 (Baseado na SQL solicitada)
   const getCapitao = (codcong) => {
     const id = Number(codcong);
     if ([1, 16, 17, 11, 12, 22, 23].includes(id)) return 'ELVIS';
@@ -1125,7 +1488,6 @@ function renderRelatorioCharts(contagens, periodosParametros, setores, congs, pe
     return { rotulo, qtd };
   });
 
-  // Ordena por ordem alfabética do rótulo (equivalente ao ORDER BY 1 da SQL)
   congsProcessadas.sort((a, b) => a.rotulo.localeCompare(b.rotulo));
 
   const labels5 = congsProcessadas.map(item => item.rotulo);
@@ -1319,7 +1681,6 @@ function renderRelatorioCharts(contagens, periodosParametros, setores, congs, pe
     }
   });
 
-  // Renderização do Novo Gráfico 5 (Barras Horizontais: Eixo Y = Capitão - Congregação, Eixo X = Quantidade)
   chartInstanceRep5 = new Chart(ctx5, {
     type: 'bar',
     data: {
@@ -1335,7 +1696,7 @@ function renderRelatorioCharts(contagens, periodosParametros, setores, congs, pe
       }]
     },
     options: {
-      indexAxis: 'y', // Transforma o gráfico em barras horizontais
+      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -1602,8 +1963,11 @@ function renderDesignacoes(){
   });
 
   let escalasFiltradas = escalas;
-  if (designacaoDataFilter) {
+  if (designacaoDataFilter && designacaoDataFilter !== 'ALL') {
     escalasFiltradas = escalasFiltradas.filter(es => es.data.split('T')[0] === designacaoDataFilter);
+  }
+  if (designacaoPeriodoFilter && designacaoPeriodoFilter !== 'ALL') {
+    escalasFiltradas = escalasFiltradas.filter(es => String(es.codperiodo) === String(designacaoPeriodoFilter));
   }
 
   const searchQuery = (window._designacaoSearchPessoa || '').toLowerCase();
@@ -1646,7 +2010,7 @@ function renderDesignacoes(){
   }).join('');
 
   const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
-  let dateOptionsHtml = '<option value="">Todas as Datas</option>';
+  let dateOptionsHtml = '<option value="ALL">Todas as Datas</option>';
   if(ev && ev.data_inicio && ev.data_final){
     const inicioStr = ev.data_inicio.split('T')[0];
     const finalStr = ev.data_final.split('T')[0];
@@ -1659,6 +2023,9 @@ function renderDesignacoes(){
     }
   }
 
+  const periodos = db['periodo'] || [];
+  const periodosOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(designacaoPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
+
   tabDes.innerHTML = `
     <div class="flex-shrink-0 mb-4">
       <div class="flex flex-wrap items-center justify-between gap-4">
@@ -1667,10 +2034,21 @@ function renderDesignacoes(){
           <p class="text-slate-500 text-sm">Escalas e contato direto via WhatsApp</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
+          <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span>Atualizar Dados</span>
+          </button>
+
           <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
             <span class="text-xs text-slate-500 font-medium">Data:</span>
             <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
               ${dateOptionsHtml}
+            </select>
+          </div>
+          <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+            <span class="text-xs text-slate-500 font-medium">Período:</span>
+            <select id="designacao-periodo-filter" onchange="changeDesignacaoPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+              ${periodosOptionsHtml}
             </select>
           </div>
           <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
@@ -1784,7 +2162,12 @@ function updateCounts(){
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap).forEach(e=>{
     const el = document.getElementById('nav-count-'+e.key);
     if(el){
-      const filtered = (db[e.key]||[]).filter(r => e.isGlobal || r.codevento == evId);
+      let filtered = db[e.key] || [];
+      if (e.key === 'evento') {
+        filtered = filtered.filter(r => !evId || r.codevento == evId);
+      } else if (!e.isGlobal) {
+        filtered = filtered.filter(r => r.codevento == evId);
+      }
       el.textContent = filtered.length;
     }
   });
@@ -1801,11 +2184,20 @@ function renderTable(key){
   const emptyEl = document.getElementById('empty-'+key);
   let rows = db[key] || [];
 
-  if(!ent.isGlobal && key !== 'evento'){
+  if(key === 'evento'){
+    rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
+  } else if(!ent.isGlobal){
     rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
   }
 
   if (key === 'contagem') {
+    if (contagemDataFilter !== 'ALL') {
+      rows = rows.filter(ct => ct.data && ct.data.split('T')[0] === contagemDataFilter);
+    }
+    if (contagemPeriodoFilter !== 'ALL') {
+      rows = rows.filter(ct => String(ct.codperiodo) === String(contagemPeriodoFilter));
+    }
+
     rows.sort((a, b) => {
       const dataA = (a.data || '').split('T')[0];
       const dataB = (b.data || '').split('T')[0];
@@ -1821,7 +2213,23 @@ function renderTable(key){
     });
   }
 
+  if (key === 'parametros') {
+    if (parametroDataFilter !== 'ALL') {
+      rows = rows.filter(p => p.datacont && p.datacont.split('T')[0] === parametroDataFilter);
+    }
+    if (parametroPeriodoFilter !== 'ALL') {
+      rows = rows.filter(p => String(p.codperiodo) === String(parametroPeriodoFilter));
+    }
+  }
+
   if (key === 'escalas') {
+    if (escalaDataFilter !== 'ALL') {
+      rows = rows.filter(es => es.data && es.data.split('T')[0] === escalaDataFilter);
+    }
+    if (escalaPeriodoFilter !== 'ALL') {
+      rows = rows.filter(es => String(es.codperiodo) === String(escalaPeriodoFilter));
+    }
+
     rows.sort((a, b) => {
       const dataA = (a.data || '').split('T')[0];
       const dataB = (b.data || '').split('T')[0];
@@ -1886,11 +2294,30 @@ function renderTable(key){
   tableEl.classList.remove('hidden');
   if(rows.length===0){
     tbody.innerHTML='';
-    emptyEl.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
     emptyEl.innerHTML = `Nenhum registro encontrado.`;
     return;
   }
   emptyEl.classList.add('hidden');
+
+  if (key === 'contagem') {
+    const dateEl = document.getElementById('contagem-date-filter');
+    if(dateEl) dateEl.value = contagemDataFilter;
+    const periodoEl = document.getElementById('contagem-periodo-filter');
+    if(periodoEl) periodoEl.value = contagemPeriodoFilter;
+  }
+  if (key === 'parametros') {
+    const dateEl = document.getElementById('parametro-date-filter');
+    if(dateEl) dateEl.value = parametroDataFilter;
+    const periodoEl = document.getElementById('parametro-periodo-filter');
+    if(periodoEl) periodoEl.value = parametroPeriodoFilter;
+  }
+  if (key === 'escalas') {
+    const dateEl = document.getElementById('escala-date-filter');
+    if(dateEl) dateEl.value = escalaDataFilter;
+    const periodoEl = document.getElementById('escala-periodo-filter');
+    if(periodoEl) periodoEl.value = escalaPeriodoFilter;
+  }
 
   tbody.innerHTML = rows.map(r=>{
     const tableFields = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
@@ -1905,8 +2332,8 @@ function renderTable(key){
     }).join('');
     
     let actionsCell = '';
-    const showEdit = !isPublicView || (key === 'contagem' && !isPublicView);
-    const showDelete = !isPublicView;
+    const showEdit = !isPublicView || key === 'contagem';
+    const showDelete = !isPublicView && key !== 'evento';
 
     if (showEdit || showDelete) {
       actionsCell = `<td class="px-6 py-4 whitespace-nowrap">
@@ -2051,6 +2478,18 @@ function openEntityModal(key, id){
         });
       }
 
+      if (key === 'contagem' && f.name === 'codperiodo') {
+        const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
+        if (dataContagemEl && dataContagemEl.value) {
+          const selData = dataContagemEl.value;
+          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+          const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
+          refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)));
+        } else {
+          refList = [];
+        }
+      }
+
       if (key === 'escalas' && f.name === 'codpessoa') {
         const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
         const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
@@ -2076,7 +2515,7 @@ function openEntityModal(key, id){
         }
       }
 
-      const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
+      const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : (f.onContagemDataChange ? 'onchange="onContagemDataChange()"' : '');
       const opts = refList.map(r=>{
         const rid = r[refEnt.pk];
         return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
@@ -2088,20 +2527,19 @@ function openEntityModal(key, id){
         control = `<select data-field="${f.name}" ${onChangeAttr} class="${base}"><option value="">Selecione…</option>${opts}</select>`;
       }
     } else if(f.type==='date'){
-      let minAttr = '';
-      let maxAttr = '';
-      if(f.limitToEvent && ev && ev.data_inicio && ev.data_final){
-        minAttr = `min="${ev.data_inicio.split('T')[0]}"`;
-        maxAttr = `max="${ev.data_final.split('T')[0]}"`;
-      }
-
       if(key === 'contagem' && f.name === 'data'){
-        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId));
+        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
         const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : ''))].filter(Boolean).sort();
         
-        let dateOpts = '<option value="">Selecione uma data cadastrada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
-        control = `<select data-field="${f.name}" class="${base}">${dateOpts}</select>`;
+        let dateOpts = '<option value="">Selecione uma data liberada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
+        control = `<select data-field="${f.name}" onchange="onContagemDataChange()" class="${base}">${dateOpts}</select>`;
       } else {
+        let minAttr = '';
+        let maxAttr = '';
+        if(f.limitToEvent && ev && ev.data_inicio && ev.data_final){
+          minAttr = `min="${ev.data_inicio.split('T')[0]}"`;
+          maxAttr = `max="${ev.data_final.split('T')[0]}"`;
+        }
         const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
         control = `<input type="date" data-field="${f.name}" ${onChangeAttr} value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
       }
@@ -2131,6 +2569,25 @@ function openEntityModal(key, id){
       onEscalaPeriodoChange(initialPeriodoEl.value);
     }
   }
+}
+
+function onContagemDataChange(){
+  const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
+  const periodoSelect = document.querySelector('#modal-form [data-field="codperiodo"]');
+  if(!dataContagemEl || !periodoSelect) return;
+
+  const selData = dataContagemEl.value;
+  const evId = globalEventoId;
+  const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+  const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
+
+  let refList = (db['periodo'] || []).filter(per => periodosAtivosIds.has(String(per.codperiodo)));
+  const currentPeriodoVal = periodoSelect.value;
+  const opts = refList.map(r=>{
+    const rid = r['codperiodo'];
+    return `<option value="${rid}" ${currentPeriodoVal == rid ? 'selected':''}>${escapeHtml(r.descricao)} (#${rid})</option>`;
+  }).join('');
+  periodoSelect.innerHTML = '<option value="">Selecione um período liberado…</option>' + opts;
 }
 
 function toggleAllDisponibilidade(masterCheckbox){
@@ -2219,7 +2676,6 @@ function onEscalaPeriodoChange(codPeriodo){
 document.getElementById('entity-form').addEventListener('submit', async function(ev){
   ev.preventDefault();
   const { key, editingId } = modalState;
-  if(isPublicView && key === 'contagem' && editingId !== null) return;
   const ent = entity(key);
   const form = ev.target;
   const values = {};
@@ -2306,6 +2762,22 @@ document.getElementById('entity-form').addEventListener('submit', async function
     }
   });
 
+  if (key === 'contagem') {
+    const dataStr = values.data ? values.data.split('T')[0] : '';
+    const codPeriodoVal = Number(values.codperiodo);
+    const parametroEncontrado = (db['parametros'] || []).find(p => 
+      Number(p.codevento) === Number(globalEventoId) &&
+      p.datacont && p.datacont.split('T')[0] === dataStr &&
+      Number(p.codperiodo) === codPeriodoVal &&
+      (p.ativo === true || p.ativo === 'true')
+    );
+
+    if (!parametroEncontrado) {
+      showToast('Este período não está liberado para contagem nos parâmetros deste evento.');
+      hasError = true;
+    }
+  }
+
   if (key === 'pessoa' && values.telefone) {
     const telefoneDuplicado = (db['pessoa'] || []).some(p => p.telefone === values.telefone && (!editingId || p.codpessoa !== Number(editingId)));
     if (telefoneDuplicado) {
@@ -2324,7 +2796,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
     }
   }
 
-  if(hasError){ showToast('Corrija os campos destacados.'); return; }
+  if(hasError){ return; }
 
   const saveBtn = document.getElementById('modal-save-btn');
   saveBtn.disabled = true; saveBtn.textContent = 'Salvando…';
@@ -2369,7 +2841,12 @@ document.getElementById('entity-form').addEventListener('submit', async function
     buildLayout();
     closeModal('modal-form');
   }catch(err){
-    showToast(err.message);
+    let msg = err.message || '';
+    if (msg.includes('uk_contagem_evento_data_periodo_setor') || msg.includes('duplicate key value')) {
+      showToast('Já existe uma contagem registrada para este setor nesta data e período.');
+    } else {
+      showToast(msg);
+    }
   }finally{
     saveBtn.disabled = false; saveBtn.textContent = 'Salvar';
   }
@@ -2402,7 +2879,7 @@ function showToast(msg){
   toastTimer = setTimeout(()=>{ toast.classList.add('translate-y-20','opacity-0'); }, 4000);
 }
 
-loadDB();
+loadDBForLogin();
 </script>
 </body>
 </html>

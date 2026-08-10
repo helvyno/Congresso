@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Configurar o Express para servir os arquivos estáticos (index.html, logo.jpg, fundo.jpg, etc.) da pasta atual
+// Configurar o Express para servir os arquivos estáticos
 app.use(express.static(path.join(__dirname)));
 
 const pool = new Pool({
@@ -124,7 +124,11 @@ tables.forEach(table => {
       const { rows } = await pool.query(query, values);
       res.status(201).json(rows[0]);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
+        res.status(400).json({ error: 'Já existe uma contagem registrada para este setor nesta data e período.' });
+      } else {
+        res.status(500).json({ error: err.message });
+      }
     }
   });
 
@@ -139,7 +143,11 @@ tables.forEach(table => {
       const { rows } = await pool.query(query, [...values, id]);
       res.json(rows[0]);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
+        res.status(400).json({ error: 'Já existe uma contagem registrada para este setor nesta data e período.' });
+      } else {
+        res.status(500).json({ error: err.message });
+      }
     }
   });
 
