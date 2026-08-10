@@ -70,7 +70,6 @@
             <div>
               <label class="block text-xs text-slate-300 mb-1">Senha do Administrador do Evento:</label>
               <input type="password" id="welcome-password" placeholder="Informe a senha apenas para administradores..." class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
-              <!-- MENSAGEM DE ERRO DE SENHA INTEGRADA NA TELA -->
               <p id="password-error-msg" class="hidden text-xs text-red-400 mt-1.5 font-medium flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
                 Senha incorreta para este evento!
@@ -93,6 +92,7 @@
   <!-- HEADER PRINCIPAL DO SISTEMA -->
   <header id="main-header" class="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-sm">
     <div class="flex items-center gap-3">
+      <!-- BOTÃO TOGGLE SIDEBAR OCULTO SE FOR PUBLIC VIEW -->
       <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors" title="Ocultar/Exibir Menu">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
@@ -102,6 +102,9 @@
         <p class="text-xs text-slate-500 hidden sm:block">DATASABE Sistemas</p>
       </div>
     </div>
+
+    <!-- MENU HORIZONTAL PARA O ACESSO PÚBLICO -->
+    <nav id="public-horizontal-nav" class="hidden items-center gap-1 overflow-x-auto py-1"></nav>
 
     <div id="evento-filter-wrapper" class="hidden items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
       <span class="text-xs text-slate-500 font-medium whitespace-nowrap">Evento Ativo:</span>
@@ -533,6 +536,7 @@ async function entrarComoIndicador() {
   
   globalEventoId = Number(selectWelcome.value);
   isPublicView = true;
+  current = 'designacoes'; // Definindo Escalas (designações) como padrão inicial no acesso público
   
   const welcomeScreen = document.getElementById('welcome-screen');
   if(welcomeScreen) welcomeScreen.classList.add('hidden');
@@ -580,6 +584,7 @@ async function entrarComoAdministrador() {
     }
 
     isPublicView = false;
+    current = 'home';
     const welcomeScreen = document.getElementById('welcome-screen');
     if(welcomeScreen) welcomeScreen.classList.add('hidden');
     
@@ -672,20 +677,46 @@ function changeEscalaPeriodo(val){ escalaPeriodoFilter = val; renderTable('escal
 
 function buildLayout(){
   const nav = document.getElementById('nav');
-  if(!nav) return;
+  const publicNav = document.getElementById('public-horizontal-nav');
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+  if(!nav || !publicNav) return;
 
-  let visibleEntities = ENTITIES;
   if (isPublicView) {
-    visibleEntities = ENTITIES.filter(e => e.key === 'home' || e.key === 'designacoes' || e.key === 'mapa' || e.key === 'contagem');
-  }
+    // Ocultar sidebar e botão toggle na visão pública
+    if(toggleBtn) toggleBtn.classList.add('hidden');
+    const sidebar = document.getElementById('sidebar-nav');
+    if(sidebar) sidebar.classList.add('hidden');
+    publicNav.classList.remove('hidden');
+    publicNav.classList.add('flex');
 
-  nav.innerHTML = visibleEntities.map(e=>`
-    <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[e.key] || ICONS.evento}</svg>
-      <span class="truncate">${e.plural}</span>
-      ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
-    </button>
-  `).join('');
+    // Ordem pública exigida: 1. Escalas (designacoes), 2. Mapa, 3. Contagem
+    const publicMenus = [
+      { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
+      { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa },
+      { key: 'contagem', label: 'Contagem', icon: ICONS.contagem }
+    ];
+
+    publicNav.innerHTML = publicMenus.map(m => `
+      <button onclick="showTab('${m.key}')" id="pub-nav-${m.key}" class="nav-btn ${m.key===current?'active':''} flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${m.icon}</svg>
+        <span>${m.label}</span>
+      </button>
+    `).join('');
+
+  } else {
+    if(toggleBtn) toggleBtn.classList.remove('hidden');
+    publicNav.classList.add('hidden');
+    publicNav.classList.remove('flex');
+
+    let visibleEntities = ENTITIES;
+    nav.innerHTML = visibleEntities.map(e=>`
+      <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[e.key] || ICONS.evento}</svg>
+        <span class="truncate">${e.plural}</span>
+        ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
+      </button>
+    `).join('');
+  }
 
   const root = document.getElementById('tabs-root');
   root.innerHTML = ENTITIES.map(e=>{
@@ -1008,14 +1039,14 @@ function buildLayout(){
     `;
   }).join('');
 
-  if (isPublicView && current === 'relatorios') current = 'home';
+  if (isPublicView && (current === 'home' || current === 'relatorios')) current = 'designacoes';
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap).forEach(e=>{ e._search=''; });
   renderCurrentTab();
   updateCounts();
 }
 
 async function showTab(key){
-  if(isPublicView && key === 'relatorios') return;
+  if(isPublicView && (key === 'home' || key === 'relatorios')) return;
   current = key;
   sidebarOpen = false;
   const sidebar = document.getElementById('sidebar-nav');
@@ -1038,8 +1069,14 @@ async function showTab(key){
   if(targetTab) targetTab.classList.add('active');
   
   document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
-  const targetNav = document.getElementById('nav-'+key);
-  if(targetNav) targetNav.classList.add('active');
+  
+  if (isPublicView) {
+    const targetNav = document.getElementById('pub-nav-'+key);
+    if(targetNav) targetNav.classList.add('active');
+  } else {
+    const targetNav = document.getElementById('nav-'+key);
+    if(targetNav) targetNav.classList.add('active');
+  }
   
   renderCurrentTab();
   updateCounts();
