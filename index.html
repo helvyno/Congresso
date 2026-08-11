@@ -32,20 +32,20 @@
     <div class="flex items-center gap-3">
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-700 bg-white">
       <div>
-        <h1 class="text-white font-bold text-lg tracking-tight">DATASABE Sistemas[cite: 1]</h1>
-        <p class="text-xs text-slate-300">Gestão de Indicadores[cite: 1]</p>
+        <h1 class="text-white font-bold text-lg tracking-tight">DATASABE Sistemas</h1>
+        <p class="text-xs text-slate-300">Gestão de Indicadores</p>
       </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center my-auto py-8">
       <div class="space-y-6 text-white max-w-xl">
         <h2 class="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
-          Gestão de Indicadores[cite: 1]
+          Gestão de Indicadores
         </h2>
         <p class="text-lg text-blue-200 font-medium">Assembleias e Congressos das Testemunhas de Jeová</p>
         <div class="w-20 h-1 bg-blue-500 rounded-full"></div>
         <p class="text-slate-200 text-base leading-relaxed">
-          Organização, orientação e apoio para que tudo contribua para um evento bien organizado e agradável para todos.
+          Organização, orientação e apoio para que tudo contribua para um evento bem organizado e agradável para todos.
         </p>
       </div>
 
@@ -85,7 +85,7 @@
     </div>
 
     <div class="text-center text-xs text-slate-400">
-      &copy; 2026 DATASABE Sistemas[cite: 1]. Todos os direitos reservados.
+      &copy; 2026 DATASABE Sistemas. Todos os direitos reservados.
     </div>
   </div>
 
@@ -97,8 +97,8 @@
       </button>
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-200 bg-white">
       <div>
-        <h1 class="text-lg font-bold text-slate-900 tracking-tight">Gestão de Indicadores[cite: 1]</h1>
-        <p class="text-xs text-slate-500 hidden sm:block">DATASABE Sistemas[cite: 1]</p>
+        <h1 class="text-lg font-bold text-slate-900 tracking-tight">Gestão de Indicadores</h1>
+        <p class="text-xs text-slate-500 hidden sm:block">DATASABE Sistemas</p>
       </div>
     </div>
 
@@ -206,6 +206,7 @@ let parametroDataFilter = 'ALL';
 let parametroPeriodoFilter = 'ALL';
 let escalaDataFilter = 'ALL';
 let escalaPeriodoFilter = 'ALL';
+let presencaDateFilter = 'ALL';
 
 function toggleSidebar(e) {
   if (e) e.stopPropagation();
@@ -622,6 +623,7 @@ function updateDashboardDateOptions(){
   const selectDesDate = document.getElementById('designacao-date-filter');
   const selectParamDate = document.getElementById('parametro-date-filter');
   const selectEscDate = document.getElementById('escala-date-filter');
+  const selectPresencaDate = document.getElementById('presenca-date-filter');
 
   if(!ev || !ev.data_inicio || !ev.data_final){
     const defaultHtml = '<option value="ALL">Todas as Datas</option>';
@@ -631,6 +633,7 @@ function updateDashboardDateOptions(){
     if(selectDesDate) { selectDesDate.innerHTML = defaultHtml; designacaoDataFilter = 'ALL'; }
     if(selectParamDate) { selectParamDate.innerHTML = defaultHtml; parametroDataFilter = 'ALL'; }
     if(selectEscDate) { selectEscDate.innerHTML = defaultHtml; escalaDataFilter = 'ALL'; }
+    if(selectPresencaDate) { selectPresencaDate.innerHTML = defaultHtml; presencaDateFilter = 'ALL'; }
     return;
   }
 
@@ -653,6 +656,7 @@ function updateDashboardDateOptions(){
   if(selectDesDate){ selectDesDate.innerHTML = html; selectDesDate.value = designacaoDataFilter; }
   if(selectParamDate){ selectParamDate.innerHTML = html; selectParamDate.value = parametroDataFilter; }
   if(selectEscDate){ selectEscDate.innerHTML = html; selectEscDate.value = escalaDataFilter; }
+  if(selectPresencaDate){ selectPresencaDate.innerHTML = html; selectPresencaDate.value = presencaDateFilter; }
 }
 
 function changeGlobalEvento(val){
@@ -681,6 +685,8 @@ function changeParametroPeriodo(val){ parametroPeriodoFilter = val; renderTable(
 
 function changeEscalaDate(val){ escalaDataFilter = val; renderTable('escalas'); }
 function changeEscalaPeriodo(val){ escalaPeriodoFilter = val; renderTable('escalas'); }
+
+function changePresencaDate(val){ presencaDateFilter = val; renderPresenca(); }
 
 function buildLayout(){
   const nav = document.getElementById('nav');
@@ -1120,6 +1126,13 @@ function buildLayout(){
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
               <span>Atualizar Dados</span>
             </button>
+
+            <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+              <span class="text-xs text-slate-500 font-medium">Data:</span>
+              <select id="presenca-date-filter" onchange="changePresencaDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                <option value="ALL">Todas as Datas</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
@@ -2125,19 +2138,19 @@ function renderDesignacoes(){
     const horaInicio = es.hora_inicio || '';
     const horaFim = es.hora_fim || '';
 
-    // Verifica se confirmou presença no dia na tabela listapresenca
+    // Verifica se confirmou presença na data através da tabela listapresenca
     let presenteNoDia = true;
     if (pessoa && es.data) {
       const dataEscalaStr = es.data.split('T')[0];
       const presencaList = (db['listapresenca'] || []).filter(lp => Number(lp.codpessoa) === Number(pessoa.codpessoa) && Number(lp.codevento) === Number(evId));
       const hasPresenca = presencaList.some(lp => lp.data && lp.data.split('T')[0] === dataEscalaStr && (lp.presente === true || lp.presente === 'true' || lp.presente === 1));
-      if(!hasPresenca && presencaList.length > 0) {
+      if(!hasPresenca) {
         presenteNoDia = false;
       }
     }
 
     const nomeColorClass = !presenteNoDia ? 'text-red-600 font-bold' : 'text-slate-900 font-medium';
-    const alertaPresenca = !presenteNoDia ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-800" title="Não confirmou presença neste dia">Ausente</span>` : '';
+    const alertaPresenca = !presenteNoDia ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-800" title="Não confirmou presença neste dia na lista de presença">Ausente</span>` : '';
 
     let telLink = '—';
     if(telefone){
@@ -2191,7 +2204,7 @@ function renderPresenca(){
   const evId = globalEventoId;
   const ev = (db['evento']||[]).find(e => e.codevento == evId);
   
-  const eventDates = [];
+  let eventDates = [];
   if(ev && ev.data_inicio && ev.data_final){
     let curr = new Date(ev.data_inicio.split('T')[0] + 'T00:00:00');
     const end = new Date(ev.data_final.split('T')[0] + 'T00:00:00');
@@ -2199,6 +2212,11 @@ function renderPresenca(){
       eventDates.push(curr.toISOString().split('T')[0]);
       curr.setDate(curr.getDate() + 1);
     }
+  }
+
+  // Aplica o filtro de data na Lista de Presença se selecionado
+  if (presencaDateFilter && presencaDateFilter !== 'ALL') {
+    eventDates = eventDates.filter(d => d === presencaDateFilter);
   }
 
   thead.innerHTML = `
@@ -2211,6 +2229,17 @@ function renderPresenca(){
   `;
 
   let pessoas = (db['pessoa']||[]).filter(p => !evId || p.codevento == evId);
+
+  // Se houver filtro de data ativo, retorna apenas as pessoas que possuem escala na data informada
+  if (presencaDateFilter && presencaDateFilter !== 'ALL') {
+    const codsPessoasComEscalaNoDia = new Set(
+      (db['escalas'] || [])
+        .filter(es => Number(es.codevento) === Number(evId) && es.data && es.data.split('T')[0] === presencaDateFilter)
+        .map(es => Number(es.codpessoa))
+    );
+    pessoas = pessoas.filter(p => codsPessoasComEscalaNoDia.has(Number(p.codpessoa)));
+  }
+
   pessoas.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
 
   const searchQuery = (window._presencaSearch || '').toLowerCase();
@@ -2250,7 +2279,23 @@ function renderPresenca(){
     `;
   }).join('');
 
-  tbody.innerHTML = rowsHtml || `<tr><td colspan="${3 + eventDates.length}" class="text-center text-slate-400 py-12">Nenhuma pessoa encontrada.</td></tr>`;
+  tbody.innerHTML = rowsHtml || `<tr><td colspan="${3 + eventDates.length}" class="text-center text-slate-400 py-12">Nenhuma pessoa encontrada com escala para a data selecionada.</td></tr>`;
+
+  // Atualiza as opções do filtro de data na tela de presença
+  let dateOptionsHtml = '<option value="ALL">Todas as Datas</option>';
+  if(ev && ev.data_inicio && ev.data_final){
+    const inicioStr = ev.data_inicio.split('T')[0];
+    const finalStr = ev.data_final.split('T')[0];
+    let curr = new Date(inicioStr + 'T00:00:00');
+    const end = new Date(finalStr + 'T00:00:00');
+    while(curr <= end){
+      const dStr = curr.toISOString().split('T')[0];
+      dateOptionsHtml += `<option value="${dStr}" ${dStr===presencaDateFilter?'selected':''}>${formatDateBR(dStr)}</option>`;
+      curr.setDate(curr.getDate() + 1);
+    }
+  }
+  const dateSelectEl = document.getElementById('presenca-date-filter');
+  if(dateSelectEl) dateSelectEl.innerHTML = dateOptionsHtml;
 }
 
 function onSearchPresenca(val){
@@ -2265,7 +2310,6 @@ async function togglePresencaCheckbox(checkbox, codpessoa, dateStr){
 
   try {
     if (isChecked) {
-      // Inserir na tabela listapresenca
       const res = await fetch(`${API_BASE}/api/listapresenca`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2280,11 +2324,9 @@ async function togglePresencaCheckbox(checkbox, codpessoa, dateStr){
       if(!res.ok) throw new Error(data.error || 'Erro ao registrar presença');
       checkbox.setAttribute('data-codpresenca', data.codpresenca);
     } else {
-      // Deletar da tabela listapresenca
       if (existingCodPresenca) {
         await apiDelete('listapresenca', existingCodPresenca);
       } else {
-        // Fallback buscando pelo registro caso o atributo data-codpresenca não esteja preenchido
         const presencaList = (db['listapresenca'] || []).filter(lp => Number(lp.codpessoa) === Number(codpessoa) && Number(lp.codevento) === Number(evId));
         const record = presencaList.find(lp => lp.data && lp.data.split('T')[0] === dateStr);
         if (record) {
@@ -2300,7 +2342,7 @@ async function togglePresencaCheckbox(checkbox, codpessoa, dateStr){
     renderPresenca();
   } catch(err) {
     showToast('Erro ao atualizar presença: ' + err.message);
-    checkbox.checked = !isChecked; // Reverte o estado visual em caso de erro
+    checkbox.checked = !isChecked;
   }
 }
 
@@ -2323,7 +2365,6 @@ async function renderMapa(){
         onmousedown="startMapDrag(event)" onmousemove="mapDrag(event)" onmouseup="endMapDrag()" onmouseleave="endMapDrag()" 
         ontouchstart="startMapDrag(event)" ontouchmove="mapDrag(event)" ontouchend="endMapDrag()" onwheel="mapWheelZoom(event)">
         
-        <!-- Botões de Controle de Zoom e Tela Cheia Flutuantes -->
         <div class="absolute top-4 right-4 z-10 flex flex-col gap-1.5 bg-white/90 backdrop-blur-sm p-1.5 rounded-lg shadow-md border border-slate-200">
           <button onclick="zoomMapIn()" class="p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors" title="Aumentar Zoom">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -2413,7 +2454,7 @@ function toggleMapFullscreen() {
 document.addEventListener('fullscreenchange', () => {
   const icon = document.getElementById('map-fullscreen-icon');
   if (!document.fullscreenElement && icon) {
-    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>';
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l-5 5M11 5l-5-5m5 5v-4m0 4h-4"></path>';
   }
 });
 
