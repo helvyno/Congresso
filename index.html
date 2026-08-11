@@ -92,7 +92,6 @@
   <!-- HEADER PRINCIPAL DO SISTEMA -->
   <header id="main-header" class="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0 z-50 shadow-sm">
     <div class="flex items-center gap-3">
-      <!-- BOTÃO TOGGLE SIDEBAR OCULTO SE FOR PUBLIC VIEW -->
       <button onclick="toggleSidebar(event)" id="sidebar-toggle-btn" class="p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors" title="Ocultar/Exibir Menu">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
@@ -193,6 +192,11 @@ let chartInstanceRep2 = null;
 let chartInstanceRep3 = null;
 let chartInstanceRep4 = null;
 let chartInstanceRep5 = null;
+
+let currentZoom = 1;
+let isDraggingMap = false;
+let mapStartX = 0, mapStartY = 0;
+let mapTranslateX = 0, mapTranslateY = 0;
 
 let contagemDataFilter = 'ALL';
 let contagemPeriodoFilter = 'ALL';
@@ -314,7 +318,7 @@ const ENTITIES = [
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, onEscalaDataPeriodoChange:true},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onEscalaDataPeriodoChange:true},
-    {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true, searchable:true},
+    {name:'codpessoa', label:'Pessoa', type:'search_fk', ref:'pessoa', required:true, searchable:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'hora_inicio', label:'Hora início', type:'time', required:true, readonly:true},
     {name:'hora_fim', label:'Hora fim', type:'time', required:true, readonly:true}
@@ -324,7 +328,7 @@ const ENTITIES = [
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true, onContagemDataChange:true},
     {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onContagemPeriodoChange:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
-    {name:'codpessoa', label:'Pessoa', type:'fk', ref:'pessoa', required:true},
+    {name:'codpessoa', label:'Pessoa', type:'search_fk', ref:'pessoa', required:true},
     {name:'quantidade', label:'Quantidade', type:'number', required:true, placeholder:'0'}
   ]},
   { key:'usuario', label:'Usuário', plural:'Usuários', pk:'codusuario', isGlobal:true, display:r=>r.nome, fields:[
@@ -536,7 +540,7 @@ async function entrarComoIndicador() {
   
   globalEventoId = Number(selectWelcome.value);
   isPublicView = true;
-  current = 'designacoes'; // Definindo Escalas (designações) como padrão inicial no acesso público
+  current = 'designacoes';
   
   const welcomeScreen = document.getElementById('welcome-screen');
   if(welcomeScreen) welcomeScreen.classList.add('hidden');
@@ -682,14 +686,12 @@ function buildLayout(){
   if(!nav || !publicNav) return;
 
   if (isPublicView) {
-    // Ocultar sidebar e botão toggle na visão pública
     if(toggleBtn) toggleBtn.classList.add('hidden');
     const sidebar = document.getElementById('sidebar-nav');
     if(sidebar) sidebar.classList.add('hidden');
     publicNav.classList.remove('hidden');
     publicNav.classList.add('flex');
 
-    // Ordem pública exigida: 1. Escalas (designacoes), 2. Mapa, 3. Contagem
     const publicMenus = [
       { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
       { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa },
@@ -1041,6 +1043,63 @@ function buildLayout(){
 
   if (isPublicView && (current === 'home' || current === 'relatorios')) current = 'designacoes';
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap).forEach(e=>{ e._search=''; });
+  
+  // Cria a estrutura fixa da aba Designações uma única vez para evitar perda de foco do input de busca
+  const tabDes = document.getElementById('tab-designacoes');
+  if(tabDes){
+    tabDes.innerHTML = `
+      <div class="flex-shrink-0 mb-4">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-3">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 mb-1">Designações de Indicadores</h2>
+            <p class="text-slate-500 text-sm">Escalas e contato direto via WhatsApp</p>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              <span>Atualizar Dados</span>
+            </button>
+
+            <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+              <span class="text-xs text-slate-500 font-medium">Data:</span>
+              <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                <option value="ALL">Todas as Datas</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+              <span class="text-xs text-slate-500 font-medium">Período:</span>
+              <select id="designacao-periodo-filter" onchange="changeDesignacaoPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
+                <option value="ALL">Todos os Períodos</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <input type="text" id="designacao-search-input" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
+        </div>
+      </div>
+
+      <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+        <div class="flex-1 overflow-y-auto relative pb-16">
+          <table class="w-full text-sm border-collapse">
+            <thead class="sticky top-0 z-20 bg-slate-50">
+              <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <th class="px-6 py-3 bg-slate-50">Data</th>
+                <th class="px-6 py-3 bg-slate-50">Pessoa</th>
+                <th class="px-6 py-3 bg-slate-50">Setor</th>
+                <th class="px-6 py-3 bg-slate-50">Início</th>
+                <th class="px-6 py-3 bg-slate-50">Fim</th>
+                <th class="px-6 py-3 bg-slate-50">Telefone (WhatsApp)</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-designacoes-body">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
   renderCurrentTab();
   updateCounts();
 }
@@ -1975,8 +2034,8 @@ function gerarPdfistencia(){
 }
 
 function renderDesignacoes(){
-  const tabDes = document.getElementById('tab-designacoes');
-  if(!tabDes) return;
+  const tbody = document.getElementById('tabela-designacoes-body');
+  if(!tbody) return;
 
   const evId = globalEventoId;
   let escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
@@ -2046,6 +2105,8 @@ function renderDesignacoes(){
     </tr>`;
   }).join('');
 
+  tbody.innerHTML = rowsHtml || `<tr><td colspan="6" class="text-center text-slate-400 py-12">Nenhuma designação encontrada.</td></tr>`;
+
   const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
   let dateOptionsHtml = '<option value="ALL">Todas as Datas</option>';
   if(ev && ev.data_inicio && ev.data_final){
@@ -2059,60 +2120,13 @@ function renderDesignacoes(){
       curr.setDate(curr.getDate() + 1);
     }
   }
+  const dateSelectEl = document.getElementById('designacao-date-filter');
+  if(dateSelectEl) dateSelectEl.innerHTML = dateOptionsHtml;
 
   const periodos = db['periodo'] || [];
   const periodosOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(designacaoPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
-
-  tabDes.innerHTML = `
-    <div class="flex-shrink-0 mb-4">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-900 mb-1">Designações de Indicadores</h2>
-          <p class="text-slate-500 text-sm">Escalas e contato direto via WhatsApp</p>
-        </div>
-        <div class="flex items-center gap-3 flex-wrap">
-          <button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm cursor-pointer" title="Atualizar informações do banco de dados">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-            <span>Atualizar Dados</span>
-          </button>
-
-          <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
-            <span class="text-xs text-slate-500 font-medium">Data:</span>
-            <select id="designacao-date-filter" onchange="changeDesignacaoDate(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
-              ${dateOptionsHtml}
-            </select>
-          </div>
-          <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
-            <span class="text-xs text-slate-500 font-medium">Período:</span>
-            <select id="designacao-periodo-filter" onchange="changeDesignacaoPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">
-              ${periodosOptionsHtml}
-            </select>
-          </div>
-          <input type="text" placeholder="Buscar por pessoa…" value="${window._designacaoSearchPessoa || ''}" oninput="onSearchDesignacaoPessoa(this.value)" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
-        </div>
-      </div>
-    </div>
-
-    <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-      <div class="flex-1 overflow-y-auto relative pb-16">
-        <table class="w-full text-sm border-collapse">
-          <thead class="sticky top-0 z-20 bg-slate-50">
-            <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-              <th class="px-6 py-3 bg-slate-50">Data</th>
-              <th class="px-6 py-3 bg-slate-50">Pessoa</th>
-              <th class="px-6 py-3 bg-slate-50">Setor</th>
-              <th class="px-6 py-3 bg-slate-50">Início</th>
-              <th class="px-6 py-3 bg-slate-50">Fim</th>
-              <th class="px-6 py-3 bg-slate-50">Telefone (WhatsApp)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || `<tr><td colspan="6" class="text-center text-slate-400 py-12">Nenhuma designação encontrada.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+  const periodoSelectEl = document.getElementById('designacao-periodo-filter');
+  if(periodoSelectEl) periodoSelectEl.innerHTML = periodosOptionsHtml;
 }
 
 async function renderMapa(){
@@ -2129,10 +2143,33 @@ async function renderMapa(){
 
   let contentHtml = '';
   if(imgSrc){
-    contentHtml = `<img src="${imgSrc}" alt="Mapa do Evento" class="object-contain max-h-[75vh] w-auto max-w-full rounded border border-slate-200 shadow-sm bg-white">`;
+    contentHtml = `
+      <div class="relative w-full h-full overflow-hidden flex items-center justify-center bg-slate-900/5 rounded-lg border border-slate-200 select-none cursor-grab active:cursor-grabbing touch-none" id="map-wrapper-box" 
+        onmousedown="startMapDrag(event)" onmousemove="mapDrag(event)" onmouseup="endMapDrag()" onmouseleave="endMapDrag()" 
+        ontouchstart="startMapDrag(event)" ontouchmove="mapDrag(event)" ontouchend="endMapDrag()" onwheel="mapWheelZoom(event)">
+        
+        <!-- Botões de Controle de Zoom e Tela Cheia Flutuantes -->
+        <div class="absolute top-4 right-4 z-10 flex flex-col gap-1.5 bg-white/90 backdrop-blur-sm p-1.5 rounded-lg shadow-md border border-slate-200">
+          <button onclick="zoomMapIn()" class="p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors" title="Aumentar Zoom">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          </button>
+          <button onclick="zoomMapOut()" class="p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors" title="Diminuir Zoom">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+          </button>
+          <button onclick="resetMapZoom()" class="p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors text-xs font-bold" title="Resetar Zoom">
+            1:1
+          </button>
+          <div class="h-px bg-slate-200 my-0.5"></div>
+          <button onclick="toggleMapFullscreen()" id="map-fullscreen-btn" class="p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors" title="Tela Cheia">
+            <svg id="map-fullscreen-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+          </button>
+        </div>
+
+        <img id="map-image" src="${imgSrc}" alt="Mapa do Evento" style="transform: translate(${mapTranslateX}px, ${mapTranslateY}px) scale(${currentZoom}); transition: transform 0.1s ease-out;" class="object-contain max-h-full max-w-full pointer-events-none">
+      </div>`;
   } else {
     contentHtml = `
-      <div class="text-center py-12">
+      <div class="text-center py-12 bg-white rounded-xl border border-slate-200">
         <svg class="w-12 h-12 mx-auto text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
         <p class="text-sm text-slate-600 font-medium">Nenhum mapa cadastrado para este evento.</p>
         <p class="text-xs text-slate-400 mt-1">A imagem do mapa pode ser configurada no menu Parâmetros.</p>
@@ -2142,12 +2179,98 @@ async function renderMapa(){
   tabMapa.innerHTML = `
     <div class="flex-shrink-0 mb-4">
       <h2 class="text-2xl font-bold text-slate-900 mb-1">Mapa do Evento</h2>
-      <p class="text-slate-500 text-sm">Visualização detalhada do layout e setores do congresso</p>
+      <p class="text-slate-500 text-sm">Visualização detalhada do layout e setores do congresso (Use o toque ou os botões para navegar e dar zoom)</p>
     </div>
-    <div class="flex-1 bg-white border border-slate-200 rounded-xl p-6 flex justify-center items-center shadow-sm overflow-y-auto mb-6">
+    <div id="mapa-card-wrapper" class="flex-1 bg-white border border-slate-200 rounded-xl p-4 flex flex-col shadow-sm overflow-hidden mb-6 relative transition-all">
       ${contentHtml}
     </div>
   `;
+}
+
+function updateMapTransform() {
+  const img = document.getElementById('map-image');
+  if(img) {
+    img.style.transform = `translate(${mapTranslateX}px, ${mapTranslateY}px) scale(${currentZoom})`;
+  }
+}
+
+function zoomMapIn() {
+  currentZoom = Math.min(currentZoom + 0.25, 4);
+  updateMapTransform();
+}
+
+function zoomMapOut() {
+  currentZoom = Math.max(currentZoom - 0.25, 0.5);
+  if(currentZoom === 0.5) {
+    mapTranslateX = 0;
+    mapTranslateY = 0;
+  }
+  updateMapTransform();
+}
+
+function resetMapZoom() {
+  currentZoom = 1;
+  mapTranslateX = 0;
+  mapTranslateY = 0;
+  updateMapTransform();
+}
+
+function toggleMapFullscreen() {
+  const wrapper = document.getElementById('mapa-card-wrapper');
+  const icon = document.getElementById('map-fullscreen-icon');
+  if (!wrapper) return;
+
+  if (!document.fullscreenElement) {
+    wrapper.requestFullscreen().catch(err => {
+      showToast('Erro ao entrar em tela cheia: ' + err.message);
+    });
+    if(icon) {
+      icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4m0 5H4m5 0l-5-5m11 5V4m0 5h5m-5 0l5-5M9 15v5m0-5H4m5 0l-5 5m11-5v5m0-5h5m-5 0l5 5"></path>';
+    }
+  } else {
+    document.exitFullscreen();
+    if(icon) {
+      icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>';
+    }
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const icon = document.getElementById('map-fullscreen-icon');
+  if (!document.fullscreenElement && icon) {
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>';
+  }
+});
+
+function mapWheelZoom(e) {
+  e.preventDefault();
+  if (e.deltaY < 0) {
+    zoomMapIn();
+  } else {
+    zoomMapOut();
+  }
+}
+
+function startMapDrag(e) {
+  isDraggingMap = true;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  mapStartX = clientX - mapTranslateX;
+  mapStartY = clientY - mapTranslateY;
+}
+
+function mapDrag(e) {
+  if (!isDraggingMap) return;
+  e.preventDefault();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  mapTranslateX = clientX - mapStartX;
+  mapTranslateY = clientY - mapStartY;
+  updateMapTransform();
+}
+
+function endMapDrag() {
+  isDraggingMap = false;
 }
 
 async function salvarNovoMapa(){
@@ -2359,7 +2482,7 @@ function renderTable(key){
   tbody.innerHTML = rows.map(r=>{
     const tableFields = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
     const cells = tableFields.map(f=>{
-      if(f.type==='fk'){
+      if(f.type==='fk' || f.type==='search_fk'){
         return `<td class="px-6 py-4 text-slate-700">${escapeHtml(refLabel(f.ref, r[f.name]))} <span class="text-slate-400 font-mono text-xs">#${r[f.name]}</span></td>`;
       }
       let val = r[f.name];
@@ -2498,6 +2621,50 @@ function openEntityModal(key, id){
         <input type="checkbox" data-field="${f.name}" ${isChecked ? 'checked' : ''} class="w-5 h-5 accent-blue-600 rounded cursor-pointer">
         <span class="text-sm text-slate-700">Liberado para contagens neste dia</span>
       </div>`;
+    } else if(f.type === 'search_fk'){
+      let refList = db[f.ref] || [];
+      const evId = globalEventoId;
+      if(evId) {
+        refList = refList.filter(r => r.codevento == evId);
+      }
+      refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
+
+      if (key === 'escalas' && f.name === 'codpessoa') {
+        const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
+        const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+        if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
+          const selData = dataEscalaEl.value;
+          const selPeriodo = Number(periodoEscalaEl.value);
+          
+          refList = refList.filter(p => {
+            const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
+            if (pDisp.length === 0) return false;
+            
+            const hasIntegral = pDisp.some(d => {
+              const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+              return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
+            });
+
+            if (hasIntegral) return true;
+
+            return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
+          });
+        }
+      }
+
+      let initialDisplayVal = '';
+      if(val){
+        const found = refList.find(r => r.codpessoa == val);
+        if(found) initialDisplayVal = found.nomecompleto;
+      }
+
+      control = `
+        <div class="relative">
+          <input type="hidden" data-field="${f.name}" value="${val || ''}" id="search-fk-val-${f.name}">
+          <input type="text" id="search-fk-input-${f.name}" value="${escapeHtml(initialDisplayVal)}" placeholder="Digite para buscar pessoa..." autocomplete="off" oninput="onSearchFkInput('${f.name}', this.value)" onfocus="showSearchFkDropdown('${f.name}')" class="${base}">
+          <div id="search-fk-dropdown-${f.name}" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 hidden"></div>
+        </div>
+      `;
     } else if(f.type==='fk'){
       const refEnt = entity(f.ref);
       let refList = db[f.ref] || [];
@@ -2524,31 +2691,6 @@ function openEntityModal(key, id){
           refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)));
         } else {
           refList = [];
-        }
-      }
-
-      if (key === 'escalas' && f.name === 'codpessoa') {
-        const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
-        const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
-        if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
-          const selData = dataEscalaEl.value;
-          const selPeriodo = Number(periodoEscalaEl.value);
-          const periodoObj = (db['periodo'] || []).find(p => Number(p.codperiodo) === selPeriodo);
-          const periodoDesc = periodoObj ? periodoObj.descricao.trim().toUpperCase() : '';
-
-          refList = refList.filter(p => {
-            const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
-            if (pDisp.length === 0) return false;
-            
-            const hasIntegral = pDisp.some(d => {
-              const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
-              return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
-            });
-
-            if (hasIntegral) return true;
-
-            return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
-          });
         }
       }
 
@@ -2600,12 +2742,91 @@ function openEntityModal(key, id){
   openModal('modal-form');
   checkMasterDisponibilidade();
 
+  document.addEventListener('click', function(e) {
+    ['codpessoa'].forEach(fieldName => {
+      const dropdown = document.getElementById(`search-fk-dropdown-${fieldName}`);
+      const input = document.getElementById(`search-fk-input-${fieldName}`);
+      if (dropdown && input && !dropdown.contains(e.target) && !input.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  });
+
   if(key === 'escalas'){
     const initialPeriodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
     if(initialPeriodoEl && initialPeriodoEl.value){
       onEscalaPeriodoChange(initialPeriodoEl.value);
     }
   }
+}
+
+function getSearchFkList(fieldName) {
+  const evId = globalEventoId;
+  let refList = db['pessoa'] || [];
+  if(evId) {
+    refList = refList.filter(r => r.codevento == evId);
+  }
+  refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
+
+  const { key } = modalState;
+  if (key === 'escalas') {
+    const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
+    const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+    if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
+      const selData = dataEscalaEl.value;
+      const selPeriodo = Number(periodoEscalaEl.value);
+      
+      refList = refList.filter(p => {
+        const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
+        if (pDisp.length === 0) return false;
+        
+        const hasIntegral = pDisp.some(d => {
+          const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+          return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
+        });
+
+        if (hasIntegral) return true;
+
+        return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
+      });
+    }
+  }
+  return refList;
+}
+
+function showSearchFkDropdown(fieldName) {
+  const dropdown = document.getElementById(`search-fk-dropdown-${fieldName}`);
+  if(!dropdown) return;
+  const query = document.getElementById(`search-fk-input-${fieldName}`).value.toLowerCase();
+  const refList = getSearchFkList(fieldName);
+  const filtered = refList.filter(r => r.nomecompleto.toLowerCase().includes(query));
+
+  if(filtered.length === 0){
+    dropdown.innerHTML = '<div class="px-4 py-2.5 text-xs text-slate-400">Nenhuma pessoa encontrada</div>';
+  } else {
+    dropdown.innerHTML = filtered.map(r => `
+      <div onclick="selectSearchFkItem('${fieldName}', ${r.codpessoa}, '${escapeHtml(r.nomecompleto).replace(/'/g, "\\'")}')" class="px-4 py-2.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer border-b border-slate-100 last:border-b-0 font-medium">
+        ${escapeHtml(r.nomecompleto)} <span class="text-slate-400 font-mono text-[10px]">#${r.codpessoa}</span>
+      </div>
+    `).join('');
+  }
+  dropdown.classList.remove('hidden');
+}
+
+function onSearchFkInput(fieldName, value) {
+  const hiddenInput = document.getElementById(`search-fk-val-${fieldName}`);
+  if(hiddenInput) hiddenInput.value = ''; // Limpa se o usuário digitar algo novo até selecionar
+  showSearchFkDropdown(fieldName);
+}
+
+function selectSearchFkItem(fieldName, id, name) {
+  const hiddenInput = document.getElementById(`search-fk-val-${fieldName}`);
+  const textInput = document.getElementById(`search-fk-input-${fieldName}`);
+  const dropdown = document.getElementById(`search-fk-dropdown-${fieldName}`);
+
+  if(hiddenInput) hiddenInput.value = id;
+  if(textInput) textInput.value = name;
+  if(dropdown) dropdown.classList.add('hidden');
 }
 
 function onContagemDataChange(){
@@ -2661,39 +2882,6 @@ function onEscalaDataPeriodoChange(){
   if(periodoEscalaEl && periodoEscalaEl.value){
     onEscalaPeriodoChange(periodoEscalaEl.value);
   }
-
-  const pessoaSelect = document.querySelector('#modal-form [data-field="codpessoa"]');
-  const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
-  if(!pessoaSelect || !dataEscalaEl) return;
-
-  const selData = dataEscalaEl.value;
-  const selPeriodo = periodoEscalaEl ? Number(periodoEscalaEl.value) : null;
-  const evId = globalEventoId;
-  let refList = (db['pessoa'] || []).filter(p => !evId || p.codevento == evId);
-
-  if (selData && selPeriodo) {
-    refList = refList.filter(p => {
-      const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
-      if (pDisp.length === 0) return false;
-      
-      const hasIntegral = pDisp.some(d => {
-        const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
-        return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
-      });
-
-      if (hasIntegral) return true;
-
-      return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
-    });
-  }
-
-  refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
-  const currentPessoaVal = pessoaSelect.value;
-  const opts = refList.map(r=>{
-    const rid = r['codpessoa'];
-    return `<option value="${rid}" ${currentPessoaVal == rid ? 'selected':''}>${escapeHtml(r.nomecompleto)} (#${rid})</option>`;
-  }).join('');
-  pessoaSelect.innerHTML = '<option value="">Selecione…</option>' + opts;
 }
 
 function onEscalaPeriodoChange(codPeriodo){
@@ -2733,9 +2921,14 @@ document.getElementById('entity-form').addEventListener('submit', async function
       return;
     }
 
-    const el = form.querySelector(`[data-field="${f.name}"]`);
+    let el = form.querySelector(`[data-field="${f.name}"]`);
+    if(f.type === 'search_fk'){
+      el = document.getElementById(`search-fk-val-${f.name}`);
+    }
+
     if(!el) return;
-    el.classList.remove('field-error'); err.classList.add('hidden');
+    const visualInputForError = f.type === 'search_fk' ? document.getElementById(`search-fk-input-${f.name}`) : el;
+    visualInputForError.classList.remove('field-error'); err.classList.add('hidden');
     let raw;
 
     if(f.name === 'ativo' && key === 'parametros'){
@@ -2749,7 +2942,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
     }
 
     if(f.required && !raw && raw !== false){
-      el.classList.add('field-error');
+      visualInputForError.classList.add('field-error');
       err.textContent = 'Campo obrigatório.';
       err.classList.remove('hidden');
       hasError = true;
@@ -2759,7 +2952,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
     if(f.type === 'phone' && raw) {
       const cleanPhone = String(raw).replace(/\D/g, '');
       if(cleanPhone.length !== 11){
-        el.classList.add('field-error');
+        visualInputForError.classList.add('field-error');
         err.textContent = 'O telefone deve conter exatamente 11 números.';
         err.classList.remove('hidden');
         hasError = true;
@@ -2774,7 +2967,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
       const finalDate = new Date(eventoObj.data_final.split('T')[0] + 'T00:00:00');
 
       if(rawDate < inicioDate || rawDate > finalDate){
-        el.classList.add('field-error');
+        visualInputForError.classList.add('field-error');
         err.textContent = `A data deve estar entre ${formatDateBR(eventoObj.data_inicio)} e ${formatDateBR(eventoObj.data_final)}.`;
         err.classList.remove('hidden');
         hasError = true;
@@ -2784,7 +2977,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
 
     if(f.name === 'ativo' && key === 'parametros'){
       values[f.name] = raw;
-    } else if(f.type==='fk'){
+    } else if(f.type==='fk' || f.type==='search_fk'){
       values[f.name] = raw ? Number(raw) : null;
     } else if(f.type==='number'){
       values[f.name] = raw!=='' ? Number(raw) : null;
