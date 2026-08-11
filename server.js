@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -79,6 +80,53 @@ app.post('/api/pessoadisponibilidade/salvar', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// Rotas de Lista de Presença
+app.get('/api/listapresenca', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM listapresenca ORDER BY codpresenca ASC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/listapresenca', async (req, res) => {
+  const { codpessoa, codevento, data, presente } = req.body;
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO listapresenca (codpessoa, codevento, data, presente) VALUES ($1, $2, $3, $4) RETURNING *',
+      [codpessoa, codevento, data, presente !== undefined ? presente : true]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/listapresenca/:id', async (req, res) => {
+  const id = req.params.id;
+  const { codpessoa, codevento, data, presente } = req.body;
+  try {
+    const { rows } = await pool.query(
+      'UPDATE listapresenca SET codpessoa = $1, codevento = $2, data = $3, presente = $4 WHERE codpresenca = $5 RETURNING *',
+      [codpessoa, codevento, data, presente, id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/listapresenca/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    await pool.query('DELETE FROM listapresenca WHERE codpresenca = $1', [id]);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

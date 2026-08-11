@@ -32,15 +32,15 @@
     <div class="flex items-center gap-3">
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-700 bg-white">
       <div>
-        <h1 class="text-white font-bold text-lg tracking-tight">DATASABE Sistemas</h1>
-        <p class="text-xs text-slate-300">Gestão de Indicadores</p>
+        <h1 class="text-white font-bold text-lg tracking-tight">DATASABE Sistemas[cite: 1]</h1>
+        <p class="text-xs text-slate-300">Gestão de Indicadores[cite: 1]</p>
       </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center my-auto py-8">
       <div class="space-y-6 text-white max-w-xl">
         <h2 class="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
-          Gestão de Indicadores
+          Gestão de Indicadores[cite: 1]
         </h2>
         <p class="text-lg text-blue-200 font-medium">Assembleias e Congressos das Testemunhas de Jeová</p>
         <div class="w-20 h-1 bg-blue-500 rounded-full"></div>
@@ -85,7 +85,7 @@
     </div>
 
     <div class="text-center text-xs text-slate-400">
-      &copy; 2026 DATASABE Sistemas. Todos os direitos reservados.
+      &copy; 2026 DATASABE Sistemas[cite: 1]. Todos os direitos reservados.
     </div>
   </div>
 
@@ -97,8 +97,8 @@
       </button>
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-200 bg-white">
       <div>
-        <h1 class="text-lg font-bold text-slate-900 tracking-tight">Gestão de Indicadores</h1>
-        <p class="text-xs text-slate-500 hidden sm:block">DATASABE Sistemas</p>
+        <h1 class="text-lg font-bold text-slate-900 tracking-tight">Gestão de Indicadores[cite: 1]</h1>
+        <p class="text-xs text-slate-500 hidden sm:block">DATASABE Sistemas[cite: 1]</p>
       </div>
     </div>
 
@@ -461,7 +461,7 @@ function onWelcomeEventoChange(val){
 }
 
 async function loadDB(){
-  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }];
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -486,7 +486,7 @@ async function loadDB(){
 
 async function atualizarBancoDashboard() {
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     let hasError = false;
 
@@ -1150,7 +1150,7 @@ async function showTab(key){
   if(sidebar) sidebar.classList.add('hidden');
 
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -2091,7 +2091,7 @@ function renderDesignacoes(){
 
     const perA = refRelationDescricao('periodo', a.codperiodo);
     const perB = refRelationDescricao('periodo', b.codperiodo);
-    if (perA !== perB) return perA.localeCompare(perB);
+    if (perA !== perB) return perA.localeCompare(perA);
 
     const pessoaA = refRelationDescricao('pessoa', a.codpessoa);
     const pessoaB = refRelationDescricao('pessoa', b.codpessoa);
@@ -2125,13 +2125,13 @@ function renderDesignacoes(){
     const horaInicio = es.hora_inicio || '';
     const horaFim = es.hora_fim || '';
 
-    // Verifica se confirmou presença no dia
+    // Verifica se confirmou presença no dia na tabela listapresenca
     let presenteNoDia = true;
     if (pessoa && es.data) {
       const dataEscalaStr = es.data.split('T')[0];
-      const dispList = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(pessoa.codpessoa));
-      const hasPresenca = dispList.some(d => d.data && d.data.split('T')[0] === dataEscalaStr);
-      if(!hasPresenca && dispList.length > 0) {
+      const presencaList = (db['listapresenca'] || []).filter(lp => Number(lp.codpessoa) === Number(pessoa.codpessoa) && Number(lp.codevento) === Number(evId));
+      const hasPresenca = presencaList.some(lp => lp.data && lp.data.split('T')[0] === dataEscalaStr && (lp.presente === true || lp.presente === 'true' || lp.presente === 1));
+      if(!hasPresenca && presencaList.length > 0) {
         presenteNoDia = false;
       }
     }
@@ -2228,12 +2228,14 @@ function renderPresenca(){
     const tel = escapeHtml(p.telefone || '—');
 
     let colsHtml = eventDates.map(dateStr => {
-      const dispList = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(cod));
-      const isPresente = dispList.some(d => d.data && d.data.split('T')[0] === dateStr);
+      const presencaList = (db['listapresenca'] || []).filter(lp => Number(lp.codpessoa) === Number(cod) && Number(lp.codevento) === Number(evId));
+      const recordPresenca = presencaList.find(lp => lp.data && lp.data.split('T')[0] === dateStr);
+      const isPresente = recordPresenca ? (recordPresenca.presente === true || recordPresenca.presente === 'true' || recordPresenca.presente === 1) : false;
+      const codpresenca = recordPresenca ? recordPresenca.codpresenca : '';
 
       return `
         <td class="px-6 py-4 text-center">
-          <input type="checkbox" data-presenca-cod="${cod}" data-presenca-date="${dateStr}" ${isPresente ? 'checked' : ''} onchange="togglePresencaCheckbox(this, ${cod}, '${dateStr}')" class="w-4 h-4 accent-blue-600 rounded cursor-pointer">
+          <input type="checkbox" data-presenca-cod="${cod}" data-presenca-date="${dateStr}" data-codpresenca="${codpresenca}" ${isPresente ? 'checked' : ''} onchange="togglePresencaCheckbox(this, ${cod}, '${dateStr}')" class="w-4 h-4 accent-blue-600 rounded cursor-pointer">
         </td>
       `;
     }).join('');
@@ -2259,44 +2261,43 @@ function onSearchPresenca(val){
 async function togglePresencaCheckbox(checkbox, codpessoa, dateStr){
   const isChecked = checkbox.checked;
   const evId = globalEventoId;
-  
-  let dispList = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(codpessoa));
-  
-  let periodosList = db['periodo'] || [];
-  let defaultPeriodo = periodosList.length > 0 ? periodosList[0].codperiodo : 1;
-
-  if (isChecked) {
-    if (!dispList.some(d => d.data.split('T')[0] === dateStr)) {
-      dispList.push({
-        codpessoa: Number(codpessoa),
-        codevento: Number(evId),
-        data: dateStr,
-        codperiodo: Number(defaultPeriodo)
-      });
-    }
-  } else {
-    dispList = dispList.filter(d => d.data.split('T')[0] !== dateStr);
-  }
-
-  const novasDisponibilidades = dispList.map(d => ({
-    codpessoa: Number(d.codpessoa),
-    codevento: Number(d.codevento || evId),
-    data: d.data.split('T')[0],
-    codperiodo: Number(d.codperiodo || defaultPeriodo)
-  }));
+  const existingCodPresenca = checkbox.getAttribute('data-codpresenca');
 
   try {
-    const res = await fetch(`${API_BASE}/api/pessoadisponibilidade/salvar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codpessoa: Number(codpessoa), disponibilidades: novasDisponibilidades })
-    });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.error || 'Erro ao atualizar presença');
+    if (isChecked) {
+      // Inserir na tabela listapresenca
+      const res = await fetch(`${API_BASE}/api/listapresenca`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codpessoa: Number(codpessoa),
+          codevento: Number(evId),
+          data: dateStr,
+          presente: true
+        })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Erro ao registrar presença');
+      checkbox.setAttribute('data-codpresenca', data.codpresenca);
+    } else {
+      // Deletar da tabela listapresenca
+      if (existingCodPresenca) {
+        await apiDelete('listapresenca', existingCodPresenca);
+      } else {
+        // Fallback buscando pelo registro caso o atributo data-codpresenca não esteja preenchido
+        const presencaList = (db['listapresenca'] || []).filter(lp => Number(lp.codpessoa) === Number(codpessoa) && Number(lp.codevento) === Number(evId));
+        const record = presencaList.find(lp => lp.data && lp.data.split('T')[0] === dateStr);
+        if (record) {
+          await apiDelete('listapresenca', record.codpresenca);
+        }
+      }
+      checkbox.removeAttribute('data-codpresenca');
+    }
 
-    const dispRes = await apiList('pessoadisponibilidade');
-    db['pessoadisponibilidade'] = dispRes;
+    const presencaRes = await apiList('listapresenca');
+    db['listapresenca'] = presencaRes;
     showToast('Presença atualizada!');
+    renderPresenca();
   } catch(err) {
     showToast('Erro ao atualizar presença: ' + err.message);
     checkbox.checked = !isChecked; // Reverte o estado visual em caso de erro
