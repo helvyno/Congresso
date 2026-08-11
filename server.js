@@ -41,7 +41,7 @@ entities.forEach(table => {
     escalas: 'codescala',
     contagem: 'codcont',
     usuario: 'codusuario',
-    configmapa: 'codconfigmapa',
+    configmapa: 'codmapa',
     pessoadisponibilidade: 'codpessoadisp'
   };
   const pk = pkMap[table] || 'id';
@@ -138,7 +138,6 @@ app.post('/api/listapresenca/salvar', async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    // Remove as marcações anteriores para essa pessoa e insere as novas em lote
     await client.query('DELETE FROM listapresenca WHERE codpessoa = $1', [codpessoa]);
 
     if (presencas && Array.isArray(presencas)) {
@@ -161,11 +160,11 @@ app.post('/api/listapresenca/salvar', async (req, res) => {
   }
 });
 
-// Rota específica para salvar o mapa em Base64
+// Rota específica para salvar o mapa em Base64 usando codmapa
 app.post('/api/configmapa/salvar', async (req, res) => {
   const { codevento, imagem_base64 } = req.body;
   try {
-    const check = await pool.query('SELECT codconfigmapa FROM configmapa WHERE codevento = $1', [codevento]);
+    const check = await pool.query('SELECT codmapa FROM configmapa WHERE codevento = $1', [codevento]);
     let result;
     if (check.rows.length > 0) {
       result = await pool.query(
