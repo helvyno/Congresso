@@ -45,7 +45,7 @@
         <p class="text-lg text-blue-200 font-medium">Assembleias e Congressos das Testemunhas de Jeová</p>
         <div class="w-20 h-1 bg-blue-500 rounded-full"></div>
         <p class="text-slate-200 text-base leading-relaxed">
-          Organização, orientação e apoio para que tudo contribua para um evento bem organizado e agradável para todos.
+          Organização, orientação e apoio para que tudo contribua para um evento bien organizado e agradável para todos.
         </p>
       </div>
 
@@ -461,7 +461,7 @@ function onWelcomeEventoChange(val){
 }
 
 async function loadDB(){
-  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -486,7 +486,7 @@ async function loadDB(){
 
 async function atualizarBancoDashboard() {
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     let hasError = false;
 
@@ -1150,7 +1150,7 @@ async function showTab(key){
   if(sidebar) sidebar.classList.add('hidden');
 
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -2125,12 +2125,13 @@ function renderDesignacoes(){
     const horaInicio = es.hora_inicio || '';
     const horaFim = es.hora_fim || '';
 
+    // Verifica se confirmou presença no dia
     let presenteNoDia = true;
     if (pessoa && es.data) {
       const dataEscalaStr = es.data.split('T')[0];
-      const presencaList = (db['listapresenca'] || []).filter(l => Number(l.codpessoa) === Number(pessoa.codpessoa));
-      const hasPresenca = presencaList.some(l => l.data && l.data.split('T')[0] === dataEscalaStr && (l.presente === true || l.presente === 'true'));
-      if(!hasPresenca) {
+      const dispList = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(pessoa.codpessoa));
+      const hasPresenca = dispList.some(d => d.data && d.data.split('T')[0] === dataEscalaStr);
+      if(!hasPresenca && dispList.length > 0) {
         presenteNoDia = false;
       }
     }
@@ -2227,8 +2228,8 @@ function renderPresenca(){
     const tel = escapeHtml(p.telefone || '—');
 
     let colsHtml = eventDates.map(dateStr => {
-      const presencaList = (db['listapresenca'] || []).filter(l => Number(l.codpessoa) === Number(cod));
-      const isPresente = presencaList.some(l => l.data && l.data.split('T')[0] === dateStr && (l.presente === true || l.presente === 'true'));
+      const dispList = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(cod));
+      const isPresente = dispList.some(d => d.data && d.data.split('T')[0] === dateStr);
 
       return `
         <td class="px-6 py-4 text-center">
@@ -2259,46 +2260,46 @@ async function togglePresencaCheckbox(checkbox, codpessoa, dateStr){
   const isChecked = checkbox.checked;
   const evId = globalEventoId;
   
-  let presencaList = (db['listapresenca'] || []).filter(l => Number(l.codpessoa) === Number(codpessoa));
+  let dispList = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(codpessoa));
+  
+  let periodosList = db['periodo'] || [];
+  let defaultPeriodo = periodosList.length > 0 ? periodosList[0].codperiodo : 1;
 
   if (isChecked) {
-    if (!presencaList.some(l => l.data && l.data.split('T')[0] === dateStr)) {
-      presencaList.push({
+    if (!dispList.some(d => d.data.split('T')[0] === dateStr)) {
+      dispList.push({
         codpessoa: Number(codpessoa),
         codevento: Number(evId),
         data: dateStr,
-        presente: true
+        codperiodo: Number(defaultPeriodo)
       });
-    } else {
-      const item = presencaList.find(l => l.data && l.data.split('T')[0] === dateStr);
-      if(item) item.presente = true;
     }
   } else {
-    presencaList = presencaList.filter(l => !(l.data && l.data.split('T')[0] === dateStr));
+    dispList = dispList.filter(d => d.data.split('T')[0] !== dateStr);
   }
 
-  const novasPresencas = presencaList.map(l => ({
-    codpessoa: Number(l.codpessoa),
-    codevento: Number(l.codevento || evId),
-    data: l.data.split('T')[0],
-    presente: true
+  const novasDisponibilidades = dispList.map(d => ({
+    codpessoa: Number(d.codpessoa),
+    codevento: Number(d.codevento || evId),
+    data: d.data.split('T')[0],
+    codperiodo: Number(d.codperiodo || defaultPeriodo)
   }));
 
   try {
-    const res = await fetch(`${API_BASE}/api/listapresenca/salvar`, {
+    const res = await fetch(`${API_BASE}/api/pessoadisponibilidade/salvar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codpessoa: Number(codpessoa), presencas: novasPresencas })
+      body: JSON.stringify({ codpessoa: Number(codpessoa), disponibilidades: novasDisponibilidades })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'Erro ao atualizar presença');
 
-    const presencaRes = await apiList('listapresenca');
-    db['listapresenca'] = presencaRes;
+    const dispRes = await apiList('pessoadisponibilidade');
+    db['pessoadisponibilidade'] = dispRes;
     showToast('Presença atualizada!');
   } catch(err) {
     showToast('Erro ao atualizar presença: ' + err.message);
-    checkbox.checked = !isChecked;
+    checkbox.checked = !isChecked; // Reverte o estado visual em caso de erro
   }
 }
 
@@ -2520,7 +2521,7 @@ function renderTable(key){
   if(key === 'evento'){
     rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
   } else if(!ent.isGlobal){
-    rows = rows.filter(r => !globalEventoId || r.codevento == evId);
+    rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
   }
 
   if (key === 'contagem') {
@@ -2802,6 +2803,29 @@ function openEntityModal(key, id){
       }
       refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
 
+      if (key === 'escalas' && f.name === 'codpessoa') {
+        const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
+        const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+        if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
+          const selData = dataEscalaEl.value;
+          const selPeriodo = Number(periodoEscalaEl.value);
+          
+          refList = refList.filter(p => {
+            const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
+            if (pDisp.length === 0) return false;
+            
+            const hasIntegral = pDisp.some(d => {
+              const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+              return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
+            });
+
+            if (hasIntegral) return true;
+
+            return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
+          });
+        }
+      }
+
       let initialDisplayVal = '';
       if(val){
         const found = refList.find(r => r.codpessoa == val);
@@ -2836,7 +2860,7 @@ function openEntityModal(key, id){
         const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
         if (dataContagemEl && dataContagemEl.value) {
           const selData = dataContagemEl.value;
-          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
           const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
           refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)));
         } else {
@@ -2857,7 +2881,7 @@ function openEntityModal(key, id){
       }
     } else if(f.type==='date'){
       if(key === 'contagem' && f.name === 'data'){
-        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == evId) && (p.ativo === true || p.ativo === 'true'));
+        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
         const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : ''))].filter(Boolean).sort();
         
         let dateOpts = '<option value="">Selecione uma data liberada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
@@ -2917,6 +2941,30 @@ function getSearchFkList(fieldName) {
     refList = refList.filter(r => r.codevento == evId);
   }
   refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
+
+  const { key } = modalState;
+  if (key === 'escalas') {
+    const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
+    const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+    if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
+      const selData = dataEscalaEl.value;
+      const selPeriodo = Number(periodoEscalaEl.value);
+      
+      refList = refList.filter(p => {
+        const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
+        if (pDisp.length === 0) return false;
+        
+        const hasIntegral = pDisp.some(d => {
+          const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+          return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
+        });
+
+        if (hasIntegral) return true;
+
+        return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
+      });
+    }
+  }
   return refList;
 }
 
