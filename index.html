@@ -45,7 +45,7 @@
         <p class="text-lg text-blue-200 font-medium">Assembleias e Congressos das Testemunhas de Jeová</p>
         <div class="w-20 h-1 bg-blue-500 rounded-full"></div>
         <p class="text-slate-200 text-base leading-relaxed">
-          Organização, orientação e apoio para que tudo contribua para um evento bien organizado e agradável para todos.
+          Organização, orientação e apoio para que tudo contribua para um evento bem organizado e agradável para todos.
         </p>
       </div>
 
@@ -2125,7 +2125,6 @@ function renderDesignacoes(){
     const horaInicio = es.hora_inicio || '';
     const horaFim = es.hora_fim || '';
 
-    // Verifica se confirmou presença na tabela exclusiva de Lista de Presença
     let presenteNoDia = true;
     if (pessoa && es.data) {
       const dataEscalaStr = es.data.split('T')[0];
@@ -2521,7 +2520,7 @@ function renderTable(key){
   if(key === 'evento'){
     rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
   } else if(!ent.isGlobal){
-    rows = rows.filter(r => !globalEventoId || r.codevento == globalEventoId);
+    rows = rows.filter(r => !globalEventoId || r.codevento == evId);
   }
 
   if (key === 'contagem') {
@@ -2803,29 +2802,6 @@ function openEntityModal(key, id){
       }
       refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
 
-      if (key === 'escalas' && f.name === 'codpessoa') {
-        const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
-        const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
-        if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
-          const selData = dataEscalaEl.value;
-          const selPeriodo = Number(periodoEscalaEl.value);
-          
-          refList = refList.filter(p => {
-            const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
-            if (pDisp.length === 0) return false;
-            
-            const hasIntegral = pDisp.some(d => {
-              const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
-              return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
-            });
-
-            if (hasIntegral) return true;
-
-            return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
-          });
-        }
-      }
-
       let initialDisplayVal = '';
       if(val){
         const found = refList.find(r => r.codpessoa == val);
@@ -2941,30 +2917,6 @@ function getSearchFkList(fieldName) {
     refList = refList.filter(r => r.codevento == evId);
   }
   refList.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
-
-  const { key } = modalState;
-  if (key === 'escalas') {
-    const dataEscalaEl = document.querySelector('#modal-form [data-field="data"]');
-    const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
-    if (dataEscalaEl && periodoEscalaEl && dataEscalaEl.value && periodoEscalaEl.value) {
-      const selData = dataEscalaEl.value;
-      const selPeriodo = Number(periodoEscalaEl.value);
-      
-      refList = refList.filter(p => {
-        const pDisp = (db['pessoadisponibilidade'] || []).filter(d => Number(d.codpessoa) === Number(p.codpessoa) && d.data.split('T')[0] === selData);
-        if (pDisp.length === 0) return false;
-        
-        const hasIntegral = pDisp.some(d => {
-          const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
-          return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
-        });
-
-        if (hasIntegral) return true;
-
-        return pDisp.some(d => Number(d.codperiodo) === selPeriodo);
-      });
-    }
-  }
   return refList;
 }
 

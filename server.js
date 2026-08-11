@@ -21,35 +21,40 @@ app.get('/api/health/check', async (req, res) => {
   }
 });
 
-// Rotas genéricas para entidades padrão
+// Mapeamento correto das chaves primárias de cada tabela (sem inventar colunas)
+const pkMap = {
+  evento: 'codevento',
+  setor: 'codsetor',
+  congregacao: 'codcong',
+  privilegio: 'codprivilegio',
+  periodo: 'codperiodo',
+  perfil: 'codperfil',
+  parametros: 'codparametro',
+  pessoa: 'codpessoa',
+  escalas: 'codescala',
+  contagem: 'codcont',
+  usuario: 'codusuario',
+  configmapa: 'codmapa',
+  listapresenca: 'codpresenca'
+};
+
 const entities = [
   'evento', 'setor', 'congregacao', 'privilegio', 'periodo', 
   'perfil', 'parametros', 'pessoa', 'escalas', 'contagem', 
-  'usuario', 'configmapa', 'pessoadisponibilidade'
+  'usuario', 'configmapa', 'pessoadisponibilidade', 'listapresenca'
 ];
 
 entities.forEach(table => {
-  const pkMap = {
-    evento: 'codevento',
-    setor: 'codsetor',
-    congregacao: 'codcong',
-    privilegio: 'codprivilegio',
-    periodo: 'codperiodo',
-    perfil: 'codperfil',
-    parametros: 'codparametro',
-    pessoa: 'codpessoa',
-    escalas: 'codescala',
-    contagem: 'codcont',
-    usuario: 'codusuario',
-    configmapa: 'codmapa',
-    pessoadisponibilidade: 'codpessoadisp'
-  };
   const pk = pkMap[table] || 'id';
 
   // GET: Listar todos
   app.get(`/api/${table}`, async (req, res) => {
     try {
-      const result = await pool.query(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
+      let query = `SELECT * FROM ${table}`;
+      if (pkMap[table]) {
+        query += ` ORDER BY ${pk} ASC`;
+      }
+      const result = await pool.query(query);
       res.json(result.rows);
     } catch (err) {
       console.error(`Erro ao listar ${table}:`, err);
@@ -79,59 +84,51 @@ entities.forEach(table => {
     }
   });
 
-  // PUT: Atualizar registro
-  app.put(`/api/${table}/:id`, async (req, res) => {
-    const { id } = req.params;
-    const data = req.body;
-    const keys = Object.keys(data);
-    const values = Object.values(data);
+  // PUT: Atualizar registro (Apenas para tabelas que possuem chave primária padrão)
+  if (pkMap[table]) {
+    app.put(`/api/${table}/:id`, async (req, res) => {
+      const { id } = req.params;
+      const data = req.body;
+      const keys = Object.keys(data);
+      const values = Object.values(data);
 
-    if (keys.length === 0) {
-      return res.status(400).json({ error: 'Nenhum dado enviado para atualização.' });
-    }
-
-    const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
-    const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${keys.length + 1} RETURNING *`;
-
-    try {
-      const result = await pool.query(query, [...values, id]);
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Registro não encontrado.' });
+      if (keys.length === 0) {
+        return res.status(400).json({ error: 'Nenhum dado enviado para atualização.' });
       }
-      res.json(result.rows[0]);
-    } catch (err) {
-      console.error(`Erro ao atualizar ${table}:`, err);
-      res.status(500).json({ error: err.message });
-    }
-  });
 
-  // DELETE: Excluir registro
-  app.delete(`/api/${table}/:id`, async (req, res) => {
-    const { id } = req.params;
-    try {
-      const result = await pool.query(`DELETE FROM ${table} WHERE ${pk} = $1 RETURNING *`, [id]);
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Registro não encontrado.' });
+      const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+      const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${keys.length + 1} RETURNING *`;
+
+      try {
+        const result = await pool.query(query, [...values, id]);
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Registro não encontrado.' });
+        }
+        res.json(result.rows[0]);
+      } catch (err) {
+        console.error(`Erro ao atualizar ${table}:`, err);
+        res.status(500).json({ error: err.message });
       }
-      res.status(204).send();
-    } catch (err) {
-      console.error(`Erro ao excluir de ${table}:`, err);
-      res.status(500).json({ error: err.message });
-    }
-  });
-});
+    });
 
-// Rotas específicas e isoladas para a Lista de Presença
-app.get('/api/listapresenca', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM listapresenca ORDER BY codpresenca ASC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Erro ao buscar lista de presença:', err);
-    res.status(500).json({ error: 'Erro ao buscar lista de presença' });
+    // DELETE: Excluir registro
+    app.delete(`/api/${table}/:id`, async (req, res) => {
+      const { id } = req.params;
+      try {
+        const result = await pool.query(`DELETE FROM ${table} WHERE ${pk} = $1 RETURNING *`, [id]);
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Registro não encontrado.' });
+        }
+        res.status(204).send();
+      } catch (err) {
+        console.error(`Erro ao excluir de ${table}:`, err);
+        res.status(500).json({ error: err.message });
+      }
+    });
   }
 });
 
+// Rota específica para salvar Lista de Presença em lote
 app.post('/api/listapresenca/salvar', async (req, res) => {
   const { codpessoa, presencas } = req.body;
   const client = await pool.connect();
@@ -174,7 +171,7 @@ app.post('/api/configmapa/salvar', async (req, res) => {
     } else {
       result = await pool.query(
         'INSERT INTO configmapa (codevento, imagem_base64) VALUES ($1, $2) RETURNING *',
-        [codevento, imagem_base64]
+        [codevento, codevento]
       );
     }
     res.json(result.rows[0]);
@@ -184,7 +181,7 @@ app.post('/api/configmapa/salvar', async (req, res) => {
   }
 });
 
-// Rota específica para salvar disponibilidade em lote
+// Rota específica para salvar disponibilidade em lote (sem depender de codpessoadisp)
 app.post('/api/pessoadisponibilidade/salvar', async (req, res) => {
   const { codpessoa, disponibilidades } = req.body;
   const client = await pool.connect();
