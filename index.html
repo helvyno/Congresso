@@ -10,8 +10,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-  body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
-  .tab-content { display: none; flex-direction: column; }
+  body { font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+  .tab-content { display: none; height: calc(100vh - 65px); flex-direction: column; }
   .tab-content.active { display: flex; }
   .nav-btn.active { background-color: #3b82f6; color: white; }
   .nav-btn { color: #64748b; }
@@ -23,14 +23,9 @@
   .field-error { border-color: #ef4444 !important; }
   .nav-count { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(0,0,0,.06); padding: 1px 7px; border-radius: 9999px; margin-left: auto; }
   .nav-btn.active .nav-count { background: rgba(255,255,255,.25); }
-
-  @media (min-width: 768px) {
-    body { height: 100vh; overflow: hidden; }
-    .tab-content { height: calc(100vh - 65px); }
-  }
 </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800">
 
   <!-- TELA INICIAL (LANDING PAGE) COM AUTENTICAÇÃO -->
   <div id="welcome-screen" class="fixed inset-0 z-[100] flex flex-col justify-between p-6 md:p-12 overflow-y-auto bg-slate-900 bg-cover bg-center" style="background-image: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.4)), url('fundo.jpg');">
@@ -128,12 +123,12 @@
     </div>
   </header>
 
-  <div class="flex flex-row flex-1 md:h-[calc(100vh-65px)] overflow-hidden relative">
+  <div class="flex flex-row flex-1 h-[calc(100vh-65px)] overflow-hidden relative">
     <aside id="sidebar-nav" class="w-64 bg-white border-r border-slate-200 p-3 md:p-4 overflow-y-auto transition-all duration-300 absolute inset-y-0 left-0 z-40 hidden shadow-xl">
       <nav id="nav" class="flex flex-col gap-1"></nav>
     </aside>
 
-    <main class="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto md:overflow-hidden flex flex-col w-full">
+    <main class="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto flex flex-col w-full">
       <div id="tabs-root" class="flex-1 flex flex-col min-h-0"></div>
     </main>
   </div>
@@ -2907,7 +2902,7 @@ function openEntityModal(key, id){
         const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
         if (dataContagemEl && dataContagemEl.value) {
           const selData = dataContagemEl.value;
-          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
           const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
           refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)));
         } else {
