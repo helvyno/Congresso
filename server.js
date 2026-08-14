@@ -133,7 +133,7 @@ app.delete('/api/listapresenca/:id', async (req, res) => {
 const tables = [
   'evento', 'setor', 'congregacao', 'privilegio', 
   'periodo', 'perfil', 'parametros', 'pessoa', 
-  'escalas', 'contagem', 'usuario'
+  'escalas', 'contagem'
 ];
 
 tables.forEach(table => {
@@ -207,6 +207,85 @@ tables.forEach(table => {
       res.status(500).json({ error: err.message });
     }
   });
+});
+
+// Usuários são independentes de Pessoas. O login é a chave lógica do acesso;
+// por isso a API não permite replicações do mesmo usuário e retorna apenas
+// o registro mais recente quando a base já contém duplicidades históricas.
+app.get('/api/usuario', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT ON (LOWER(TRIM(login))) *
+      FROM usuario
+      ORDER BY LOWER(TRIM(login)), codusuario DESC
+    `);
+    rows.sort((a, b) => Number(a.codusuario) - Number(b.codusuario));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/usuario', async (req, res) => {
+  const data = { ...req.body };
+  if (data.login !== undefined && data.login !== null) {
+    data.login = String(data.login).replace(/\\D/g, '');
+  }
+  const keys = Object.keys(data);
+  const values = Object.values(data);
+  const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+  try {
+    const duplicate = await pool.query(
+      'SELECT codusuario FROM usuario WHERE LOWER(TRIM(login)) = LOWER(TRIM($1)) LIMIT 1',
+      [data.login]
+    );
+    if (duplicate.rows.length) {
+      return res.status(409).json({ error: 'Este login já está cadastrado na tabela de usuários.' });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO usuario (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      values
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/usuario/:id', async (req, res) => {
+  const id = req.params.id;
+  const data = { ...req.body };
+  if (data.login !== undefined && data.login !== null) {
+    data.login = String(data.login).replace(/\\D/g, '');
+  }
+  const keys = Object.keys(data);
+  const values = Object.values(data);
+  const setString = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
+  try {
+    const duplicate = await pool.query(
+      'SELECT codusuario FROM usuario WHERE LOWER(TRIM(login)) = LOWER(TRIM($1)) AND codusuario <> $2 LIMIT 1',
+      [data.login, id]
+    );
+    if (duplicate.rows.length) {
+      return res.status(409).json({ error: 'Este login já está cadastrado na tabela de usuários.' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE usuario SET ${setString} WHERE codusuario = $${keys.length + 1} RETURNING *`,
+      [...values, id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/usuario/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM usuario WHERE codusuario = $1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 const PORT = process.env.PORT || 3000;

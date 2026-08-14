@@ -10,9 +10,22 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-  body { font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-  .tab-content { display: none; height: calc(100vh - 65px); flex-direction: column; }
+  body { font-family: 'Inter', sans-serif; overflow: hidden; }
+  /* Cada aba controla sua própria rolagem; o cabeçalho permanece fora dela. */
+  .tab-content { display: none; flex: 1 1 auto; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; overscroll-behavior: contain; }
   .tab-content.active { display: flex; }
+  /* As tabelas mantêm a largura necessária e passam a rolar horizontalmente em telas estreitas. */
+  .tab-content table { min-width: max-content; }
+  .tab-content > * { min-width: 0; }
+  #tabs-root, main { min-width: 0; min-height: 0; }
+  /* Nestas telas, a rolagem vertical pertence à página abaixo do cabeçalho. */
+  #main-content.page-scroll-mode { display: block; overflow-y: auto; overflow-x: hidden; }
+  #main-content.page-scroll-mode #tabs-root { display: block; }
+  #main-content.page-scroll-mode .tab-content.active { display: flex; flex: none; min-height: 100%; height: auto; overflow: visible !important; }
+  #main-content.page-scroll-mode .tab-content.active > .flex-1.bg-white { flex: none; min-height: 420px; overflow: visible; }
+  #main-content.page-scroll-mode .tab-content.active > .flex-1.bg-white > div { flex: none; overflow-x: auto; overflow-y: visible; }
+  #main-content.page-scroll-mode .parameters-records-card { flex: none; min-height: 420px; overflow: visible; }
+  #main-content.page-scroll-mode .parameters-records-card > div { flex: none; overflow-x: auto; overflow-y: visible; }
   .nav-btn.active { background-color: #3b82f6; color: white; }
   .nav-btn { color: #64748b; }
   .nav-btn:hover:not(.active) { background-color: #f1f5f9; color: #0f172a; }
@@ -25,7 +38,7 @@
   .nav-btn.active .nav-count { background: rgba(255,255,255,.25); }
 </style>
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col">
 
   <!-- TELA INICIAL (LANDING PAGE) COM AUTENTICAÇÃO -->
   <div id="welcome-screen" class="fixed inset-0 z-[100] flex flex-col justify-between p-6 md:p-12 overflow-y-auto bg-slate-900 bg-cover bg-center" style="background-image: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.4)), url('fundo.jpg');">
@@ -123,12 +136,12 @@
     </div>
   </header>
 
-  <div class="flex flex-row flex-1 h-[calc(100vh-65px)] overflow-hidden relative">
+  <div class="flex flex-row flex-1 min-h-0 h-[calc(100dvh-65px)] overflow-hidden relative">
     <aside id="sidebar-nav" class="w-64 bg-white border-r border-slate-200 p-3 md:p-4 overflow-y-auto transition-all duration-300 absolute inset-y-0 left-0 z-40 hidden shadow-xl">
       <nav id="nav" class="flex flex-col gap-1"></nav>
     </aside>
 
-    <main class="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto flex flex-col w-full">
+    <main id="main-content" class="flex-1 min-w-0 min-h-0 p-4 md:p-6 overflow-hidden flex flex-col w-full">
       <div id="tabs-root" class="flex-1 flex flex-col min-h-0"></div>
     </main>
   </div>
@@ -779,7 +792,7 @@ function buildLayout(){
             </div>
           </div>
           <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-            <div class="flex-1 overflow-y-auto relative pb-16">
+            <div class="flex-1 overflow-auto relative pb-16">
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -797,7 +810,7 @@ function buildLayout(){
 
     if (e.isCustomParametros) {
       return `
-        <div id="tab-${e.key}" class="tab-content ${e.key===current?'active':''}">
+        <div id="tab-${e.key}" class="tab-content parameters-page-tab ${e.key===current?'active':''}">
           <div class="flex-shrink-0 mb-4">
             <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
               <div>
@@ -848,8 +861,8 @@ function buildLayout(){
             <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
               class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
           </div>
-          <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-            <div class="flex-1 overflow-y-auto relative pb-16">
+          <div class="flex-1 parameters-records-card bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
+            <div class="flex-1 overflow-auto relative pb-16">
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -891,7 +904,7 @@ function buildLayout(){
             </div>
           </div>
           <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-            <div class="flex-1 overflow-y-auto relative pb-16">
+            <div class="flex-1 overflow-auto relative pb-16">
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -947,7 +960,7 @@ function buildLayout(){
             </div>
           </div>
           <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-            <div class="flex-1 overflow-y-auto relative pb-16">
+            <div class="flex-1 overflow-auto relative pb-16">
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -1003,7 +1016,7 @@ function buildLayout(){
             </div>
           </div>
           <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-            <div class="flex-1 overflow-y-auto relative pb-16">
+            <div class="flex-1 overflow-auto relative pb-16">
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -1038,7 +1051,7 @@ function buildLayout(){
           </div>
         </div>
         <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-          <div class="flex-1 overflow-y-auto relative pb-16">
+          <div class="flex-1 overflow-auto relative pb-16">
             <table class="w-full text-sm border-collapse">
               <thead class="sticky top-0 z-20 bg-slate-50">
                 <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -1092,7 +1105,7 @@ function buildLayout(){
       </div>
 
       <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-        <div class="flex-1 overflow-y-auto relative pb-16">
+        <div class="flex-1 overflow-auto relative pb-16">
           <table class="w-full text-sm border-collapse">
             <thead class="sticky top-0 z-20 bg-slate-50">
               <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -1141,7 +1154,7 @@ function buildLayout(){
       </div>
 
       <div class="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6 shadow-sm">
-        <div class="flex-1 overflow-y-auto relative pb-16">
+        <div class="flex-1 overflow-auto relative pb-16">
           <table class="w-full text-sm border-collapse">
             <thead id="tabela-presenca-head" class="sticky top-0 z-20 bg-slate-50"></thead>
             <tbody id="tabela-presenca-body"></tbody>
@@ -1158,6 +1171,9 @@ function buildLayout(){
 async function showTab(key){
   if(isPublicView && (key === 'home' || key === 'relatorios' || key === 'presenca')) return;
   current = key;
+  const mainContent = document.getElementById('main-content');
+  const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'pessoa', 'escalas', 'contagem'];
+  if(mainContent) mainContent.classList.toggle('page-scroll-mode', pageScrollTabs.includes(key));
   sidebarOpen = false;
   const sidebar = document.getElementById('sidebar-nav');
   if(sidebar) sidebar.classList.add('hidden');
@@ -2902,7 +2918,7 @@ function openEntityModal(key, id){
         const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
         if (dataContagemEl && dataContagemEl.value) {
           const selData = dataContagemEl.value;
-          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
           const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
           refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)));
         } else {
