@@ -288,6 +288,85 @@ app.delete('/api/usuario/:id', async (req, res) => {
   }
 });
 
+// Módulo BI: relatórios SQL personalizados, sempre restritos a consultas de leitura.
+// A estrutura da tabela relatorios_bi está no arquivo sql/criar_relatorios_bi.sql.
+
+function validateBiSql(sql) {
+  const normalized = String(sql || '').trim().replace(/;+\s*$/, '');
+  if (!normalized) throw new Error('Informe a consulta SQL.');
+  if (normalized.includes(';')) throw new Error('Informe apenas uma instrução SQL por relatório.');
+  if (!/^(select|with)\b/i.test(normalized)) {
+    throw new Error('Por segurança, os relatórios BI aceitam apenas consultas SELECT ou WITH.');
+  }
+  if (/\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|vacuum|call|do)\b/i.test(normalized)) {
+    throw new Error('A consulta contém uma operação não permitida.');
+  }
+  return normalized;
+}
+
+app.get('/api/bi', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, nome, descricao, sql_consulta, ativo, criado_em, atualizado_em FROM relatorios_bi ORDER BY nome ASC, id ASC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/bi', async (req, res) => {
+  try {
+    const { nome, descricao, sql_consulta, ativo = true } = req.body || {};
+    const sql = validateBiSql(sql_consulta);
+    if (!String(nome || '').trim()) return res.status(400).json({ error: 'Informe o nome do relatório.' });
+    const { rows } = await pool.query(
+      'INSERT INTO relatorios_bi (nome, descricao, sql_consulta, ativo) VALUES ($1, $2, $3, $4) RETURNING *',
+      [String(nome).trim(), descricao || null, sql, ativo !== false]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/bi/:id', async (req, res) => {
+  try {
+    const { nome, descricao, sql_consulta, ativo = true } = req.body || {};
+    const sql = validateBiSql(sql_consulta);
+    if (!String(nome || '').trim()) return res.status(400).json({ error: 'Informe o nome do relatório.' });
+    const { rows } = await pool.query(
+      'UPDATE relatorios_bi SET nome = $1, descricao = $2, sql_consulta = $3, ativo = $4, atualizado_em = NOW() WHERE id = $5 RETURNING *',
+      [String(nome).trim(), descricao || null, sql, ativo !== false, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Relatório BI não encontrado.' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/bi/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM relatorios_bi WHERE id = $1', [req.params.id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Relatório BI não encontrado.' });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/bi/:id/executar', async (req, res) => {
+  try {
+    const report = await pool.query('SELECT id, nome, sql_consulta, ativo FROM relatorios_bi WHERE id = $1', [req.params.id]);
+    if (!report.rows.length) return res.status(404).json({ error: 'Relatório BI não encontrado.' });
+    if (!report.rows[0].ativo) return res.status(400).json({ error: 'Este relatório está inativo.' });
+    const sql = validateBiSql(report.rows[0].sql_consulta);
+    const result = await pool.query({ text: sql, values: [], rowMode: 'array' });
+    res.json({ nome: report.rows[0].nome, columns: result.fields.map(field => field.name), rows: result.rows });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);

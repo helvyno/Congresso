@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   body { font-family: 'Inter', sans-serif; overflow: hidden; }
@@ -260,12 +261,14 @@ const ICONS = {
   usuario: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>',
   parametros: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>',
   mapa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>',
-  presenca: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>'
+  presenca: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
+  bi: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8"></path>'
 };
 
 const AVAILABLE_MENUS = [
   { key: 'Dashboard', label: 'Dashboard' },
   { key: 'Relatórios', label: 'Relatórios' },
+  { key: 'BI', label: 'BI' },
   { key: 'Designações', label: 'Designações' },
   { key: 'Mapa do Evento', label: 'Mapa do Evento' },
   { key: 'Lista de Presença', label: 'Lista de Presença' },
@@ -285,6 +288,7 @@ const AVAILABLE_MENUS = [
 const ENTITIES = [
   { key:'home', label:'Início', plural:'Dashboard', isHome:true },
   { key:'relatorios', label:'Relatório', plural:'Relatórios', isReport:true },
+  { key:'bi', label:'BI', plural:'BI', isBI:true },
   { key:'designacoes', label:'Designação', plural:'Designações', isCustom:true },
   { key:'mapa', label:'Mapa', plural:'Mapa do Evento', isCustomMap:true },
   { key:'presenca', label:'Presença', plural:'Lista de Presença', isCustomPresenca:true },
@@ -475,7 +479,7 @@ function onWelcomeEventoChange(val){
 }
 
 async function loadDB(){
-  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -500,7 +504,7 @@ async function loadDB(){
 
 async function atualizarBancoDashboard() {
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     let hasError = false;
 
@@ -760,6 +764,10 @@ function buildLayout(){
     if(e.isCustomPresenca){
       if(isPublicView) return '';
       return `<div id="tab-presenca" class="tab-content overflow-y-auto ${current==='presenca'?'active':''}"></div>`;
+    }
+    if(e.isBI){
+      if(isPublicView) return '';
+      return `<div id="tab-bi" class="tab-content overflow-y-auto ${current==='bi'?'active':''}"></div>`;
     }
 
     const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
@@ -1169,7 +1177,7 @@ function buildLayout(){
 }
 
 async function showTab(key){
-  if(isPublicView && (key === 'home' || key === 'relatorios' || key === 'presenca')) return;
+  if(isPublicView && (key === 'home' || key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
   current = key;
   const mainContent = document.getElementById('main-content');
   const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'pessoa', 'escalas', 'contagem'];
@@ -1179,7 +1187,7 @@ async function showTab(key){
   if(sidebar) sidebar.classList.add('hidden');
 
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -1217,9 +1225,11 @@ function renderCurrentTab(){
     renderDesignacoes();
   } else if(current === 'mapa'){
     renderMapa();
-  } else if(current === 'presenca'){
-    renderPresenca();
-  } else {
+    } else if(current === 'presenca'){
+      renderPresenca();
+    } else if(current === 'bi'){
+      renderBI();
+    } else {
     renderTable(current);
   }
 }
@@ -3330,6 +3340,60 @@ async function deleteRecord(key, id){
 
 function openModal(id){ document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+
+let biEditingId = null;
+let biLastResult = null;
+
+function renderBI(){
+  const tab = document.getElementById('tab-bi');
+  if(!tab) return;
+  const reports = db.bi || [];
+  tab.innerHTML = `
+    <div class="flex-shrink-0 mb-5">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Business Intelligence</p>
+          <h2 class="text-2xl font-bold text-slate-900">Relatórios personalizados</h2>
+          <p class="text-sm text-slate-500 mt-1">Cadastre consultas SQL de leitura, execute-as e exporte os resultados.</p>
+        </div>
+        <button onclick="resetBIForm()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm">
+          <span class="text-lg leading-none">+</span> Novo relatório
+        </button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-[minmax(320px,390px)_minmax(0,1fr)] gap-5 min-h-0">
+      <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 h-fit">
+        <div class="flex items-center justify-between mb-4">
+          <div><h3 id="bi-form-title" class="font-bold text-slate-900">Novo relatório</h3><p class="text-xs text-slate-500 mt-1">Somente SELECT ou WITH.</p></div>
+          <span class="text-xs font-medium px-2 py-1 rounded-full bg-blue-50 text-blue-700">${reports.length} cadastrado(s)</span>
+        </div>
+        <form onsubmit="saveBIReport(event)" class="space-y-3">
+          <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome <span class="text-red-500">*</span></label><input id="bi-name" required maxlength="160" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" placeholder="Ex.: Pessoas por congregação"></div>
+          <div><label class="block text-xs font-medium text-slate-600 mb-1">Descrição</label><textarea id="bi-description" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" placeholder="Finalidade do relatório"></textarea></div>
+          <div><label class="block text-xs font-medium text-slate-600 mb-1">Instrução SQL <span class="text-red-500">*</span></label><textarea id="bi-sql" required rows="10" spellcheck="false" class="w-full bg-slate-950 text-emerald-300 border border-slate-800 rounded-lg px-3 py-2.5 text-xs font-mono leading-relaxed focus:outline-none focus:border-blue-500" placeholder="SELECT ..."></textarea><p class="text-[11px] text-slate-500 mt-1">A API bloqueia comandos de alteração, múltiplas instruções e comandos que não sejam de leitura.</p></div>
+          <label class="flex items-center gap-2 text-sm text-slate-600"><input id="bi-active" type="checkbox" checked class="rounded border-slate-300 text-blue-600"> Relatório ativo</label>
+          <div class="flex gap-2 pt-2"><button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg">Salvar relatório</button><button type="button" onclick="resetBIForm()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Limpar</button></div>
+        </form>
+      </section>
+      <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[420px]">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between"><div><h3 class="font-bold text-slate-900">Relatórios cadastrados</h3><p class="text-xs text-slate-500 mt-1">Use o ícone de execução para consultar a base.</p></div><span class="text-xs text-slate-400">Ações</span></div>
+        <div class="overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500"><tr><th class="text-left px-5 py-3">Nome</th><th class="text-left px-5 py-3">Descrição</th><th class="text-left px-5 py-3">Status</th><th class="text-right px-5 py-3">Ações</th></tr></thead><tbody>${reports.length ? reports.map(bi => `<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-5 py-3 font-medium text-slate-800">${escapeHtml(bi.nome)}</td><td class="px-5 py-3 text-slate-500 max-w-xs truncate">${escapeHtml(bi.descricao || '—')}</td><td class="px-5 py-3"><span class="px-2 py-1 rounded-full text-xs ${bi.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${bi.ativo ? 'Ativo' : 'Inativo'}</span></td><td class="px-5 py-3"><div class="flex justify-end gap-1"><button title="Executar consulta" onclick="executeBI(${bi.id})" class="p-2 rounded-lg text-emerald-700 hover:bg-emerald-50">▶</button><button title="Editar" onclick="editBI(${bi.id})" class="p-2 rounded-lg text-blue-700 hover:bg-blue-50">✎</button><button title="Excluir" onclick="deleteBI(${bi.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50">✕</button></div></td></tr>`).join('') : '<tr><td colspan="4" class="px-5 py-14 text-center text-slate-400">Nenhum relatório cadastrado.</td></tr>'}</tbody></table></div>
+      </section>
+    </div>
+    <section id="bi-result-card" class="mt-5 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"></section>`;
+  if(biEditingId) loadBIForm(biEditingId);
+}
+
+function resetBIForm(){ biEditingId = null; const title = document.getElementById('bi-form-title'); if(title) title.textContent = 'Novo relatório'; ['bi-name','bi-description','bi-sql'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; }); const active=document.getElementById('bi-active'); if(active) active.checked=true; }
+function loadBIForm(id){ const report=(db.bi||[]).find(r=>Number(r.id)===Number(id)); if(!report) return; biEditingId=Number(id); document.getElementById('bi-form-title').textContent='Editar relatório'; document.getElementById('bi-name').value=report.nome||''; document.getElementById('bi-description').value=report.descricao||''; document.getElementById('bi-sql').value=report.sql_consulta||''; document.getElementById('bi-active').checked=report.ativo !== false; }
+function editBI(id){ loadBIForm(id); document.getElementById('bi-name')?.scrollIntoView({behavior:'smooth', block:'center'}); }
+async function saveBIReport(event){ event.preventDefault(); const payload={nome:document.getElementById('bi-name').value.trim(), descricao:document.getElementById('bi-description').value.trim(), sql_consulta:document.getElementById('bi-sql').value.trim(), ativo:document.getElementById('bi-active').checked}; try { const data=biEditingId ? await apiUpdate('bi', biEditingId, payload) : await apiCreate('bi', payload); if(!biEditingId) db.bi=[...(db.bi||[]),data]; else db.bi=(db.bi||[]).map(r=>Number(r.id)===Number(biEditingId)?data:r); showToast('Relatório BI salvo com sucesso.'); biEditingId=null; renderBI(); } catch(err){ showToast('Erro ao salvar relatório: '+err.message); } }
+async function deleteBI(id){ if(!confirm('Excluir este relatório BI?')) return; try { await apiDelete('bi', id); db.bi=(db.bi||[]).filter(r=>Number(r.id)!==Number(id)); showToast('Relatório excluído.'); renderBI(); } catch(err){ showToast('Erro ao excluir relatório: '+err.message); } }
+async function executeBI(id){ const resultCard=document.getElementById('bi-result-card'); if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-slate-500">Executando consulta…</div>'; try { const r=await fetch(`${API_BASE}/api/bi/${id}/executar`,{method:'POST',headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok) throw new Error(data.error||'Falha ao executar consulta.'); biLastResult=data; renderBIResult(data); } catch(err){ if(resultCard) resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; } }
+function renderBIResult(data){ const card=document.getElementById('bi-result-card'); if(!card) return; const cols=data.columns||[], rows=data.rows||[]; card.innerHTML=`<div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-bold text-slate-900">Resultado: ${escapeHtml(data.nome)}</h3><p class="text-xs text-slate-500 mt-1">${rows.length} registro(s) · ${cols.length} coluna(s)</p></div><div class="flex gap-2"><button onclick="exportBIExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar Excel</button><button onclick="exportBIPdf()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar PDF</button></div></div><div class="overflow-auto max-h-[480px]"><table class="w-full text-xs"><thead class="sticky top-0 bg-slate-50 text-slate-600"><tr>${cols.map(c=>`<th class="text-left px-4 py-3 border-b border-slate-200 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr class="border-b border-slate-100 hover:bg-slate-50">${row.map(value=>`<td class="px-4 py-2.5 whitespace-nowrap text-slate-700">${escapeHtml(value === null ? 'NULL' : value)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${Math.max(cols.length,1)}" class="px-4 py-10 text-center text-slate-400">A consulta não retornou registros.</td></tr>`}</tbody></table></div>`; }
+function exportBIExcel(){ if(!biLastResult) return; const matrix=[biLastResult.columns,...biLastResult.rows]; const ws=XLSX.utils.aoa_to_sheet(matrix); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Resultado'); XLSX.writeFile(wb,`${slugify(biLastResult.nome)}.xlsx`); }
+function exportBIPdf(){ if(!biLastResult) return; const body=[biLastResult.columns,...biLastResult.rows.map(row=>row.map(value=>value===null?'NULL':String(value)))]; pdfMake.createPdf({pageOrientation:'landscape',pageSize:'A4',content:[{text:biLastResult.nome,style:'header'},{text:`Gerado em ${new Date().toLocaleString('pt-BR')}`,fontSize:8,color:'#64748b',margin:[0,0,0,10]},{table:{headerRows:1,body},layout:'lightHorizontalLines'}],styles:{header:{fontSize:15,bold:true,color:'#0f172a'}}}).download(`${slugify(biLastResult.nome)}.pdf`); }
+function slugify(value){ return String(value||'relatorio-bi').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase() || 'relatorio-bi'; }
 
 let toastTimer=null;
 function showToast(msg){
