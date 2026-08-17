@@ -393,7 +393,8 @@ function escapeHtml(str){
 }
 
 async function apiList(table){
-  const r = await fetch(`${API_BASE}/api/${table}`);
+  const query = table === 'bi' && globalEventoId ? `?codevento=${encodeURIComponent(globalEventoId)}` : '';
+  const r = await fetch(`${API_BASE}/api/${table}${query}`);
   if(!r.ok) {
     const errorData = await r.json().catch(() => ({}));
     throw new Error(errorData.error || 'Falha ao carregar ' + table);
@@ -676,12 +677,18 @@ function updateDashboardDateOptions(){
   if(selectPresencaDate){ selectPresencaDate.innerHTML = html; selectPresencaDate.value = presencaDateFilter; }
 }
 
-function changeGlobalEvento(val){
+async function changeGlobalEvento(val){
   globalEventoId = val ? Number(val) : null;
   const selectWelcome = document.getElementById('welcome-evento-select');
   if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
 
   updateDashboardDateOptions();
+  if(globalEventoId){
+    try { db.bi = await apiList('bi'); }
+    catch(err){ db.bi = []; showToast('Não foi possível carregar os relatórios do evento: ' + err.message); }
+  } else {
+    db.bi = [];
+  }
   renderCurrentTab();
   updateCounts();
 }
@@ -3352,10 +3359,12 @@ function renderBI(){
   const tab = document.getElementById('tab-bi');
   if(!tab) return;
   const reports = db.bi || [];
+  const currentEvent = (db.evento || []).find(ev => Number(ev.codevento) === Number(globalEventoId));
+  const currentEventLabel = currentEvent ? currentEvent.descricao : `Evento ${globalEventoId || 'não selecionado'}`;
   const editorHtml = biEditorOpen ? `
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 max-w-6xl mx-auto">
       <div class="flex items-center justify-between gap-4 mb-5 flex-wrap">
-        <div><h3 id="bi-form-title" class="text-xl font-bold text-slate-900">${biEditingId ? 'Editar relatório' : 'Novo relatório'}</h3><p class="text-xs text-slate-500 mt-1">Somente SELECT ou WITH. Use Executar para validar a consulta.</p></div>
+        <div><h3 id="bi-form-title" class="text-xl font-bold text-slate-900">${biEditingId ? 'Editar relatório' : 'Novo relatório'}</h3><p class="text-xs text-slate-500 mt-1">Evento: <strong>${escapeHtml(currentEventLabel)}</strong> · Somente SELECT ou WITH. Use Executar para validar a consulta.</p></div>
         <button type="button" onclick="closeBIEditor()" class="px-3 py-2 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Voltar para a lista</button>
       </div>
       <form onsubmit="saveBIReport(event)" class="space-y-4">
@@ -3370,9 +3379,9 @@ function renderBI(){
     </section>` : `
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between"><div><h3 class="font-bold text-slate-900">Relatórios cadastrados</h3><p class="text-xs text-slate-500 mt-1">Use o ícone de execução para consultar a base.</p></div><span class="text-xs text-slate-400">${reports.length} relatório(s)</span></div>
-      <div class="overflow-x-auto"><table class="w-full min-w-[760px] text-sm"><thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500"><tr><th class="text-left px-5 py-3">Nome</th><th class="text-left px-5 py-3">Descrição</th><th class="text-left px-5 py-3">Status</th><th class="text-right px-5 py-3">Ações</th></tr></thead><tbody>${reports.length ? reports.map(bi => `<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-5 py-3 font-medium text-slate-800">${escapeHtml(bi.nome)}</td><td class="px-5 py-3 text-slate-500 max-w-xl truncate">${escapeHtml(bi.descricao || '—')}</td><td class="px-5 py-3"><span class="px-2 py-1 rounded-full text-xs ${bi.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${bi.ativo ? 'Ativo' : 'Inativo'}</span></td><td class="px-5 py-3"><div class="flex justify-end gap-1"><button title="Executar consulta" onclick="executeBI(${bi.id})" class="p-2 rounded-lg text-emerald-700 hover:bg-emerald-50">▶</button><button title="Editar" onclick="editBI(${bi.id})" class="p-2 rounded-lg text-blue-700 hover:bg-blue-50">✎</button><button title="Excluir" onclick="deleteBI(${bi.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50">✕</button></div></td></tr>`).join('') : '<tr><td colspan="4" class="px-5 py-14 text-center text-slate-400">Nenhum relatório cadastrado.</td></tr>'}</tbody></table></div>
+      <div class="max-h-[62vh] overflow-auto"><table class="w-full min-w-[760px] text-sm"><thead class="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wider text-slate-500"><tr><th class="text-left px-5 py-3">Nome</th><th class="text-left px-5 py-3">Descrição</th><th class="text-left px-5 py-3">Status</th><th class="text-right px-5 py-3">Ações</th></tr></thead><tbody>${reports.length ? reports.map(bi => `<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-5 py-3 font-medium text-slate-800">${escapeHtml(bi.nome)}</td><td class="px-5 py-3 text-slate-500 max-w-xl truncate">${escapeHtml(bi.descricao || '—')}</td><td class="px-5 py-3"><span class="px-2 py-1 rounded-full text-xs ${bi.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${bi.ativo ? 'Ativo' : 'Inativo'}</span></td><td class="px-5 py-3"><div class="flex justify-end gap-1"><button title="Executar consulta" onclick="executeBI(${bi.id})" class="p-2 rounded-lg text-emerald-700 hover:bg-emerald-50">▶</button><button title="Editar" onclick="editBI(${bi.id})" class="p-2 rounded-lg text-blue-700 hover:bg-blue-50">✎</button><button title="Excluir" onclick="deleteBI(${bi.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50">✕</button></div></td></tr>`).join('') : '<tr><td colspan="4" class="px-5 py-14 text-center text-slate-400">Nenhum relatório cadastrado.</td></tr>'}</tbody></table></div>
     </section>`;
-  tab.innerHTML = `<div class="flex-shrink-0 mb-5"><div class="flex items-start justify-between gap-4 flex-wrap"><div><p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Business Intelligence</p><h2 class="text-2xl font-bold text-slate-900">Relatórios personalizados</h2><p class="text-sm text-slate-500 mt-1">Cadastre consultas SQL de leitura, execute-as e exporte os resultados.</p></div>${biEditorOpen ? '' : '<button onclick="openBINew()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm"><span class="text-lg leading-none">+</span> Novo relatório</button>'}</div></div>${editorHtml}<section id="bi-result-card" class="mt-5 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"></section>`;
+  tab.innerHTML = `<div class="space-y-5 pb-8"><div class="flex-shrink-0"><div class="flex items-start justify-between gap-4 flex-wrap"><div><p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Business Intelligence</p><h2 class="text-2xl font-bold text-slate-900">Relatórios personalizados</h2><p class="text-sm text-slate-500 mt-1">Evento atual: <strong>${escapeHtml(currentEventLabel)}</strong> · Cadastre consultas SQL de leitura, execute-as e exporte os resultados.</p></div>${biEditorOpen ? '' : '<button onclick="openBINew()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm"><span class="text-lg leading-none">+</span> Novo relatório</button>'}</div></div>${editorHtml}<section id="bi-result-card" class="relative z-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"></section></div>`;
   if(biEditorOpen && biEditingId) loadBIForm(biEditingId); else if(biEditorOpen) updateBIRelationshipSuggestions();
 }
 
@@ -3383,15 +3392,17 @@ function loadBIForm(id){ const report=(db.bi||[]).find(r=>Number(r.id)===Number(
 function editBI(id){ biEditingId=Number(id); biEditorOpen=true; biLastResult=null; renderBI(); }
 async function executeBIFromEditor(){
   const name=document.getElementById('bi-name')?.value.trim(), sql=document.getElementById('bi-sql')?.value.trim();
+  if(!globalEventoId){ showToast('Selecione um evento antes de executar.'); return; }
   if(!name || !sql){ showToast('Informe o nome e a consulta SQL antes de executar.'); return; }
   const resultCard=document.getElementById('bi-result-card');
   if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-slate-500">Executando consulta…</div>';
   try{
-    const r=await fetch(`${API_BASE}/api/bi/executar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:name,sql_consulta:sql})});
+    const r=await fetch(`${API_BASE}/api/bi/executar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codevento:globalEventoId,nome:name,sql_consulta:sql})});
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||'Falha ao executar consulta.');
     biLastResult=data; renderBIResult(data);
-  }catch(err){ if(resultCard) resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; }
+    if(resultCard) resultCard.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(err){ if(resultCard) { resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; resultCard.scrollIntoView({behavior:'smooth', block:'start'}); } }
 }
 function getBIRelationships(){
   const relationships = [];
@@ -3439,9 +3450,9 @@ function insertBIJoin(source, sourceColumn, target, targetColumn){
   sqlEl.focus(); sqlEl.setSelectionRange(sqlEl.value.length, sqlEl.value.length);
   updateBIRelationshipSuggestions();
 }
-async function saveBIReport(event){ event.preventDefault(); const payload={nome:document.getElementById('bi-name').value.trim(), descricao:document.getElementById('bi-description').value.trim(), sql_consulta:document.getElementById('bi-sql').value.trim(), ativo:document.getElementById('bi-active').checked}; try { const editing=biEditingId; const data=editing ? await apiUpdate('bi', editing, payload) : await apiCreate('bi', payload); if(!editing) db.bi=[...(db.bi||[]),data]; else db.bi=(db.bi||[]).map(r=>Number(r.id)===Number(editing)?data:r); biEditingId=Number(data.id); showToast('Relatório BI salvo com sucesso.'); renderBI(); } catch(err){ showToast('Erro ao salvar relatório: '+err.message); } }
+async function saveBIReport(event){ event.preventDefault(); if(!globalEventoId){ showToast('Selecione um evento antes de salvar.'); return; } const payload={codevento:globalEventoId,nome:document.getElementById('bi-name').value.trim(), descricao:document.getElementById('bi-description').value.trim(), sql_consulta:document.getElementById('bi-sql').value.trim(), ativo:document.getElementById('bi-active').checked}; try { const editing=biEditingId; const data=editing ? await apiUpdate('bi', editing, payload) : await apiCreate('bi', payload); if(!editing) db.bi=[...(db.bi||[]),data]; else db.bi=(db.bi||[]).map(r=>Number(r.id)===Number(editing)?data:r); biEditingId=null; biEditorOpen=false; biLastResult=null; showToast('Relatório BI salvo com sucesso.'); renderBI(); updateCounts(); } catch(err){ showToast('Erro ao salvar relatório: '+err.message); } }
 async function deleteBI(id){ if(!confirm('Excluir este relatório BI?')) return; try { await apiDelete('bi', id); db.bi=(db.bi||[]).filter(r=>Number(r.id)!==Number(id)); showToast('Relatório excluído.'); renderBI(); } catch(err){ showToast('Erro ao excluir relatório: '+err.message); } }
-async function executeBI(id){ const resultCard=document.getElementById('bi-result-card'); if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-slate-500">Executando consulta…</div>'; try { const r=await fetch(`${API_BASE}/api/bi/${id}/executar`,{method:'POST',headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok) throw new Error(data.error||'Falha ao executar consulta.'); biLastResult=data; renderBIResult(data); } catch(err){ if(resultCard) resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; } }
+async function executeBI(id){ const resultCard=document.getElementById('bi-result-card'); if(!globalEventoId){ if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-red-600">Selecione um evento antes de executar.</div>'; return; } if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-slate-500">Executando consulta…</div>'; try { const r=await fetch(`${API_BASE}/api/bi/${id}/executar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codevento:globalEventoId})}); const data=await r.json(); if(!r.ok) throw new Error(data.error||'Falha ao executar consulta.'); biLastResult=data; renderBIResult(data); if(resultCard) resultCard.scrollIntoView({behavior:'smooth', block:'start'}); } catch(err){ if(resultCard){ resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; resultCard.scrollIntoView({behavior:'smooth', block:'start'}); } } }
 function renderBIResult(data){ const card=document.getElementById('bi-result-card'); if(!card) return; const cols=data.columns||[], rows=data.rows||[]; card.innerHTML=`<div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-bold text-slate-900">Resultado: ${escapeHtml(data.nome)}</h3><p class="text-xs text-slate-500 mt-1">${rows.length} registro(s) · ${cols.length} coluna(s)</p></div><div class="flex gap-2 items-center"><button onclick="exportBIExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar Excel</button><button onclick="exportBIPdf()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar PDF</button><button onclick="closeBIResult()" title="Fechar resultado" aria-label="Fechar resultado" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3 py-2 rounded-lg flex items-center gap-1.5"><span class="text-base leading-none">×</span> Fechar</button></div></div><div class="max-h-[70vh] overflow-auto"><table class="min-w-max w-full text-xs border-collapse"><thead class="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr>${cols.map(c=>`<th class="text-left px-4 py-3 border-b border-slate-200 whitespace-nowrap min-w-[140px]">${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr class="border-b border-slate-100 hover:bg-slate-50">${cols.map((_,index)=>`<td class="px-4 py-2.5 whitespace-nowrap text-slate-700 min-w-[140px]">${escapeHtml(row[index] === null || row[index] === undefined ? 'NULL' : row[index])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${Math.max(cols.length,1)}" class="px-4 py-10 text-center text-slate-400">A consulta não retornou registros.</td></tr>`}</tbody></table></div>`; }
 function closeBIResult(){ const card=document.getElementById('bi-result-card'); if(card) card.innerHTML=''; biLastResult=null; }
 function exportBIExcel(){ if(!biLastResult) return; const matrix=[biLastResult.columns,...biLastResult.rows]; const ws=XLSX.utils.aoa_to_sheet(matrix); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Resultado'); XLSX.writeFile(wb,`${slugify(biLastResult.nome)}.xlsx`); }
