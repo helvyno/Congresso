@@ -281,8 +281,7 @@ const AVAILABLE_MENUS = [
   { key: 'Perfis', label: 'Perfis' },
   { key: 'Pessoas', label: 'Pessoas' },
   { key: 'Escalas', label: 'Escalas' },
-  { key: 'Contagens', label: 'Contagens' },
-  { key: 'Usuários', label: 'Usuários' }
+  { key: 'Contagens', label: 'Contagens' }
 ];
 
 const ENTITIES = [
@@ -351,12 +350,6 @@ const ENTITIES = [
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'codpessoa', label:'Pessoa', type:'search_fk', ref:'pessoa', required:true},
     {name:'quantidade', label:'Quantidade', type:'number', required:true, placeholder:'0'}
-  ]},
-  { key:'usuario', label:'Usuário', plural:'Usuários', pk:'codusuario', isGlobal:true, display:r=>r.nome, fields:[
-    {name:'nome', label:'Nome', type:'text', required:true, placeholder:'Nome do usuário'},
-    {name:'login', label:'Login (Telefone)', type:'phone', required:true, placeholder:'34988887777'},
-    {name:'senha', label:'Senha', type:'text', required:true, placeholder:'Senha de acesso'},
-    {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
   ]}
 ];
 
@@ -2991,6 +2984,22 @@ function openEntityModal(key, id){
     </div>`;
   }).join('');
 
+  if(key === 'evento' && !record){
+    const sourceEvents = db['evento'] || [];
+    const replicationTables = [
+      ['setor', 'Setores'], ['congregacao', 'Congregações'], ['parametros', 'Parâmetros'],
+      ['pessoa', 'Pessoas'], ['escalas', 'Escalas'], ['contagem', 'Contagens'],
+      ['listapresenca', 'Lista de Presença'], ['pessoadisponibilidade', 'Disponibilidade de Pessoas'],
+      ['configmapa', 'Mapa do Evento'], ['relatorios_bi', 'Relatórios BI']
+    ];
+    fieldsEl.insertAdjacentHTML('beforeend', `<div class="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-4">
+      <div><h4 class="font-bold text-sm text-slate-900">Replicar dados de outro evento</h4><p class="text-xs text-slate-600 mt-1">Opcional. O novo evento será criado primeiro; depois os registros selecionados serão copiados para ele.</p></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1.5">Evento de origem</label><select id="evento-replication-source" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm bg-white"><option value="">Não replicar</option>${sourceEvents.map(item => `<option value="${item.codevento}">${escapeHtml(item.descricao)} (#${item.codevento})</option>`).join('')}</select></div>
+      <div><p class="block text-xs font-medium text-slate-600 mb-2">Tabelas a replicar</p><div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white border border-blue-100 rounded-lg p-3 max-h-52 overflow-y-auto">${replicationTables.map(([table,label]) => `<label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"><input type="checkbox" data-replication-table="${table}" class="w-4 h-4 accent-blue-600 rounded">${label}</label>`).join('')}</div><p class="text-[11px] text-slate-500 mt-2">Para replicar Pessoas, selecione Congregações. Para Escalas ou Contagens, selecione também Pessoas e Setores.</p></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1.5">Senha mestre do administrador</label><input id="evento-replication-password" type="password" autocomplete="new-password" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm bg-white" placeholder="Obrigatória quando houver tabelas selecionadas"><p class="text-[11px] text-slate-500 mt-1">A senha é validada contra um usuário administrador ativo da tabela de usuários.</p></div>
+    </div>`);
+  }
+
   openModal('modal-form');
   checkMasterDisponibilidade();
 
@@ -3280,6 +3289,19 @@ document.getElementById('entity-form').addEventListener('submit', async function
 
   if(hasError){ return; }
 
+  let replicationConfig = null;
+  if(key === 'evento' && editingId === null){
+    const sourceEl = document.getElementById('evento-replication-source');
+    const selectedTables = Array.from(document.querySelectorAll('#modal-form [data-replication-table]:checked')).map(input => input.getAttribute('data-replication-table'));
+    const sourceCodevento = sourceEl ? Number(sourceEl.value) : 0;
+    const masterPassword = document.getElementById('evento-replication-password')?.value || '';
+    if(selectedTables.length > 0 && (!sourceCodevento || !masterPassword)){
+      showToast('Selecione o evento de origem e informe a senha mestre para replicar os dados.');
+      return;
+    }
+    if(selectedTables.length > 0){ replicationConfig = { sourceCodevento, tables: selectedTables, masterPassword }; }
+  }
+
   const saveBtn = document.getElementById('modal-save-btn');
   saveBtn.disabled = true; saveBtn.textContent = 'Salvando…';
 
@@ -3297,8 +3319,25 @@ document.getElementById('entity-form').addEventListener('submit', async function
       if(key === 'evento'){
         globalEventoId = created.codevento;
         initGlobalEvento();
+        if(replicationConfig){
+          const replicationResponse = await fetch(`${API_BASE}/api/evento/replicar`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourceCodevento: replicationConfig.sourceCodevento, targetCodevento: created.codevento, tables: replicationConfig.tables, masterPassword: replicationConfig.masterPassword })
+          });
+          const replicationData = await replicationResponse.json().catch(() => ({}));
+          if(!replicationResponse.ok){
+            try { await apiDelete('evento', created.codevento); } catch(deleteError) { console.error('Não foi possível desfazer o evento após falha de replicação:', deleteError); }
+            db['evento'] = db['evento'].filter(item => Number(item.codevento) !== Number(created.codevento));
+            throw new Error(`O evento não foi mantido porque a replicação não foi concluída: ${replicationData.error || 'erro desconhecido'}`);
+          }
+          const totalReplicated = Object.values(replicationData.copied || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+          showToast(`Evento cadastrado e ${totalReplicated} registro(s) replicado(s).`);
+        } else {
+          showToast(`${ent.label} cadastrado!`);
+        }
+      } else {
+        showToast(`${ent.label} cadastrado!`);
       }
-      showToast(`${ent.label} cadastrado!`);
     }
 
     if(key === 'pessoa' && savedRecordId){

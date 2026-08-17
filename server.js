@@ -288,6 +288,104 @@ app.delete('/api/usuario/:id', async (req, res) => {
   }
 });
 
+// Replicação seletiva de dados ao criar um novo evento.
+const EVENT_REPLICATION_DEFINITIONS = {
+  setor: { pk: 'codsetor', columns: ['descricao', 'numass', 'codevento'], dependencies: [] },
+  congregacao: { pk: 'codcong', columns: ['nome_congregacao', 'codevento'], dependencies: [] },
+  parametros: { pk: 'codparametro', columns: ['codevento', 'datacont', 'horacont', 'codperiodo', 'ativo'], dependencies: [] },
+  pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codperfil', 'codevento', 'codcong'], dependencies: ['congregacao'] },
+  escalas: { pk: 'codescala', columns: ['codevento', 'data', 'codperiodo', 'codpessoa', 'codsetor', 'hora_inicio', 'hora_fim'], dependencies: ['pessoa', 'setor'] },
+  contagem: { pk: 'codcont', columns: ['codevento', 'data', 'codperiodo', 'codsetor', 'codpessoa', 'quantidade'], dependencies: ['pessoa', 'setor'] },
+  listapresenca: { pk: 'codpresenca', columns: ['codpessoa', 'codevento', 'data', 'presente'], dependencies: ['pessoa'] },
+  pessoadisponibilidade: { pk: null, columns: ['codpessoa', 'codevento', 'data', 'codperiodo'], dependencies: ['pessoa'] },
+  configmapa: { pk: null, columns: ['codevento', 'imagem_base64'], dependencies: [] },
+  relatorios_bi: { pk: 'id', columns: ['codevento', 'nome', 'descricao', 'sql_consulta', 'ativo'], dependencies: [] }
+};
+
+async function validarSenhaMestre(client, senha) {
+  const password = String(senha || '');
+  if (!password) return false;
+  const result = await client.query(`
+    SELECT senha
+    FROM usuario
+    WHERE (ativo IS NULL OR LOWER(TRIM(CAST(ativo AS TEXT))) IN ('true', '1', 'sim', 's'))
+      AND (UPPER(TRIM(nome)) LIKE '%ADMIN%' OR LOWER(TRIM(login)) IN ('admin', 'administrador'))
+      AND senha IS NOT NULL
+  `);
+  return result.rows.some(row => String(row.senha) === password);
+}
+
+function validarTabelasReplicacao(selectedTables) {
+  const requested = [...new Set((Array.isArray(selectedTables) ? selectedTables : []).map(String))];
+  const invalid = requested.filter(table => !EVENT_REPLICATION_DEFINITIONS[table]);
+  if (invalid.length) throw new Error(`Tabela não autorizada para replicação: ${invalid.join(', ')}`);
+  for (const table of requested) {
+    const missing = EVENT_REPLICATION_DEFINITIONS[table].dependencies.filter(dep => !requested.includes(dep));
+    if (missing.length) throw new Error(`Para replicar ${table}, selecione também: ${missing.join(', ')}.`);
+  }
+  return requested;
+}
+
+app.post('/api/evento/replicar', async (req, res) => {
+  const { sourceCodevento, targetCodevento, tables: selectedTables, masterPassword } = req.body || {};
+  const sourceId = Number(sourceCodevento);
+  const targetId = Number(targetCodevento);
+  let tablesToCopy;
+  try {
+    if (!Number.isInteger(sourceId) || !Number.isInteger(targetId) || sourceId <= 0 || targetId <= 0 || sourceId === targetId) {
+      return res.status(400).json({ error: 'Informe eventos de origem e destino válidos e diferentes.' });
+    }
+    const requestedTables = validarTabelasReplicacao(selectedTables);
+    if (!requestedTables.length) return res.status(400).json({ error: 'Selecione ao menos uma tabela para replicar.' });
+    const replicationOrder = ['congregacao', 'setor', 'parametros', 'pessoa', 'escalas', 'contagem', 'listapresenca', 'pessoadisponibilidade', 'configmapa', 'relatorios_bi'];
+    tablesToCopy = replicationOrder.filter(table => requestedTables.includes(table));
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const eventCheck = await client.query('SELECT codevento FROM evento WHERE codevento IN ($1, $2)', [sourceId, targetId]);
+      if (eventCheck.rows.length !== 2) throw new Error('Evento de origem ou destino não foi encontrado.');
+      if (!await validarSenhaMestre(client, masterPassword)) {
+        await client.query('ROLLBACK');
+        return res.status(401).json({ error: 'Senha mestre inválida.' });
+      }
+
+      const mappings = {};
+      const copied = {};
+      for (const table of tablesToCopy) {
+        const def = EVENT_REPLICATION_DEFINITIONS[table];
+        const sourceRows = await client.query(`SELECT * FROM ${table} WHERE codevento = $1 ORDER BY ${def.pk || 'codevento'} ASC`, [sourceId]);
+        mappings[table] = new Map();
+        copied[table] = 0;
+
+        for (const sourceRow of sourceRows.rows) {
+          const values = def.columns.map(column => {
+            if (column === 'codevento') return targetId;
+            if (column === 'codcong' && mappings.congregacao) return mappings.congregacao.get(String(sourceRow[column])) || null;
+            if (column === 'codsetor' && mappings.setor) return mappings.setor.get(String(sourceRow[column])) || null;
+            if (column === 'codpessoa' && mappings.pessoa) return mappings.pessoa.get(String(sourceRow[column])) || null;
+            return sourceRow[column];
+          });
+          const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+          const returning = def.pk ? ` RETURNING ${def.pk}` : '';
+          const inserted = await client.query(`INSERT INTO ${table} (${def.columns.join(', ')}) VALUES (${placeholders})${returning}`, values);
+          if (def.pk && inserted.rows[0]) mappings[table].set(String(sourceRow[def.pk]), inserted.rows[0][def.pk]);
+          copied[table] += 1;
+        }
+      }
+      await client.query('COMMIT');
+      res.json({ status: 'ok', copied });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    res.status(err.message === 'Senha mestre inválida.' ? 401 : 400).json({ error: err.message });
+  }
+});
+
 // Módulo BI: relatórios SQL personalizados, sempre restritos a consultas de leitura.
 // A estrutura da tabela relatorios_bi está no arquivo sql/criar_relatorios_bi.sql.
 
