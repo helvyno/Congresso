@@ -3370,7 +3370,7 @@ function renderBI(){
         <form onsubmit="saveBIReport(event)" class="space-y-3">
           <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome <span class="text-red-500">*</span></label><input id="bi-name" required maxlength="160" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" placeholder="Ex.: Pessoas por congregação"></div>
           <div><label class="block text-xs font-medium text-slate-600 mb-1">Descrição</label><textarea id="bi-description" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" placeholder="Finalidade do relatório"></textarea></div>
-          <div><label class="block text-xs font-medium text-slate-600 mb-1">Instrução SQL <span class="text-red-500">*</span></label><textarea id="bi-sql" required rows="10" spellcheck="false" class="w-full bg-slate-950 text-emerald-300 border border-slate-800 rounded-lg px-3 py-2.5 text-xs font-mono leading-relaxed focus:outline-none focus:border-blue-500" placeholder="SELECT ..."></textarea><p class="text-[11px] text-slate-500 mt-1">A API bloqueia comandos de alteração, múltiplas instruções e comandos que não sejam de leitura.</p></div>
+          <div><label class="block text-xs font-medium text-slate-600 mb-1">Instrução SQL <span class="text-red-500">*</span></label><textarea id="bi-sql" required rows="10" spellcheck="false" oninput="updateBIRelationshipSuggestions()" class="w-full bg-slate-950 text-emerald-300 border border-slate-800 rounded-lg px-3 py-2.5 text-xs font-mono leading-relaxed focus:outline-none focus:border-blue-500" placeholder="SELECT ..."></textarea><p class="text-[11px] text-slate-500 mt-1">A API bloqueia comandos de alteração, múltiplas instruções e comandos que não sejam de leitura.</p><div id="bi-relationship-suggestions" class="mt-3"></div></div>
           <label class="flex items-center gap-2 text-sm text-slate-600"><input id="bi-active" type="checkbox" checked class="rounded border-slate-300 text-blue-600"> Relatório ativo</label>
           <div class="flex gap-2 pt-2"><button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg">Salvar relatório</button><button type="button" onclick="resetBIForm()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Limpar</button></div>
         </form>
@@ -3384,13 +3384,60 @@ function renderBI(){
   if(biEditingId) loadBIForm(biEditingId);
 }
 
-function resetBIForm(){ biEditingId = null; const title = document.getElementById('bi-form-title'); if(title) title.textContent = 'Novo relatório'; ['bi-name','bi-description','bi-sql'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; }); const active=document.getElementById('bi-active'); if(active) active.checked=true; }
-function loadBIForm(id){ const report=(db.bi||[]).find(r=>Number(r.id)===Number(id)); if(!report) return; biEditingId=Number(id); document.getElementById('bi-form-title').textContent='Editar relatório'; document.getElementById('bi-name').value=report.nome||''; document.getElementById('bi-description').value=report.descricao||''; document.getElementById('bi-sql').value=report.sql_consulta||''; document.getElementById('bi-active').checked=report.ativo !== false; }
+function resetBIForm(){ biEditingId = null; const title = document.getElementById('bi-form-title'); if(title) title.textContent = 'Novo relatório'; ['bi-name','bi-description','bi-sql'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; }); const active=document.getElementById('bi-active'); if(active) active.checked=true; updateBIRelationshipSuggestions(); }
+function loadBIForm(id){ const report=(db.bi||[]).find(r=>Number(r.id)===Number(id)); if(!report) return; biEditingId=Number(id); document.getElementById('bi-form-title').textContent='Editar relatório'; document.getElementById('bi-name').value=report.nome||''; document.getElementById('bi-description').value=report.descricao||''; document.getElementById('bi-sql').value=report.sql_consulta||''; document.getElementById('bi-active').checked=report.ativo !== false; updateBIRelationshipSuggestions(); }
 function editBI(id){ loadBIForm(id); document.getElementById('bi-name')?.scrollIntoView({behavior:'smooth', block:'center'}); }
+function getBIRelationships(){
+  const relationships = [];
+  ENTITIES.forEach(source => {
+    (source.fields || []).forEach(field => {
+      if(field.type !== 'fk' || !field.ref || !source.pk) return;
+      const targetEntity = entity(field.ref);
+      if(!targetEntity || !targetEntity.pk) return;
+      const key = [source.key, field.ref, field.name, targetEntity.pk].join('|');
+      if(!relationships.some(r => r.key === key)) relationships.push({key, source:source.key, sourceColumn:field.name, target:field.ref, targetColumn:targetEntity.pk});
+    });
+  });
+  return relationships;
+}
+function getBITablesFromSql(sql){
+  const names = [];
+  const pattern = /\b(?:from|join)\s+([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)/gi;
+  let match;
+  while((match = pattern.exec(sql || ''))){
+    const table = match[1].split('.').pop().toLowerCase();
+    if(!names.includes(table)) names.push(table);
+  }
+  return names;
+}
+function updateBIRelationshipSuggestions(){
+  const box=document.getElementById('bi-relationship-suggestions'), sqlEl=document.getElementById('bi-sql');
+  if(!box || !sqlEl) return;
+  const tables=getBITablesFromSql(sqlEl.value);
+  const lowerSql=sqlEl.value.toLowerCase();
+  const suggestions=getBIRelationships().filter(rel => {
+    if(!tables.includes(rel.source) || !tables.includes(rel.target)) return false;
+    const direct=`${rel.source}.${rel.sourceColumn} = ${rel.target}.${rel.targetColumn}`.toLowerCase();
+    const reverse=`${rel.target}.${rel.targetColumn} = ${rel.source}.${rel.sourceColumn}`.toLowerCase();
+    return !lowerSql.includes(direct) && !lowerSql.includes(reverse);
+  });
+  if(!tables.length){ box.innerHTML='<div class="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-[11px] text-slate-500">Digite uma consulta com FROM e JOIN para receber sugestões de relacionamento.</div>'; return; }
+  if(!suggestions.length){ box.innerHTML='<div class="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">Nenhum relacionamento adicional identificado para as tabelas informadas.</div>'; return; }
+  box.innerHTML=`<div class="rounded-lg border border-blue-100 bg-blue-50/60 p-3"><div class="text-[11px] font-semibold uppercase tracking-wider text-blue-700 mb-2">Relacionamentos sugeridos</div>${suggestions.map(rel => `<button type="button" onclick="insertBIJoin('${rel.source}','${rel.sourceColumn}','${rel.target}','${rel.targetColumn}')" class="w-full text-left px-2.5 py-2 rounded-md hover:bg-white text-xs text-slate-700 transition-colors"><span class="font-mono text-blue-700">${rel.source}.${rel.sourceColumn}</span><span class="mx-1 text-slate-400">=</span><span class="font-mono text-blue-700">${rel.target}.${rel.targetColumn}</span><span class="block text-[10px] text-slate-500 mt-0.5">Clique para inserir o JOIN sugerido</span></button>`).join('')}</div>`;
+}
+function insertBIJoin(source, sourceColumn, target, targetColumn){
+  const sqlEl=document.getElementById('bi-sql'); if(!sqlEl) return;
+  const current=sqlEl.value.trimEnd();
+  const joinClause=`\nJOIN ${target} ON ${source}.${sourceColumn} = ${target}.${targetColumn}`;
+  sqlEl.value=current + joinClause;
+  sqlEl.focus(); sqlEl.setSelectionRange(sqlEl.value.length, sqlEl.value.length);
+  updateBIRelationshipSuggestions();
+}
 async function saveBIReport(event){ event.preventDefault(); const payload={nome:document.getElementById('bi-name').value.trim(), descricao:document.getElementById('bi-description').value.trim(), sql_consulta:document.getElementById('bi-sql').value.trim(), ativo:document.getElementById('bi-active').checked}; try { const data=biEditingId ? await apiUpdate('bi', biEditingId, payload) : await apiCreate('bi', payload); if(!biEditingId) db.bi=[...(db.bi||[]),data]; else db.bi=(db.bi||[]).map(r=>Number(r.id)===Number(biEditingId)?data:r); showToast('Relatório BI salvo com sucesso.'); biEditingId=null; renderBI(); } catch(err){ showToast('Erro ao salvar relatório: '+err.message); } }
 async function deleteBI(id){ if(!confirm('Excluir este relatório BI?')) return; try { await apiDelete('bi', id); db.bi=(db.bi||[]).filter(r=>Number(r.id)!==Number(id)); showToast('Relatório excluído.'); renderBI(); } catch(err){ showToast('Erro ao excluir relatório: '+err.message); } }
 async function executeBI(id){ const resultCard=document.getElementById('bi-result-card'); if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-slate-500">Executando consulta…</div>'; try { const r=await fetch(`${API_BASE}/api/bi/${id}/executar`,{method:'POST',headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok) throw new Error(data.error||'Falha ao executar consulta.'); biLastResult=data; renderBIResult(data); } catch(err){ if(resultCard) resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; } }
-function renderBIResult(data){ const card=document.getElementById('bi-result-card'); if(!card) return; const cols=data.columns||[], rows=data.rows||[]; card.innerHTML=`<div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-bold text-slate-900">Resultado: ${escapeHtml(data.nome)}</h3><p class="text-xs text-slate-500 mt-1">${rows.length} registro(s) · ${cols.length} coluna(s)</p></div><div class="flex gap-2"><button onclick="exportBIExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar Excel</button><button onclick="exportBIPdf()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar PDF</button></div></div><div class="overflow-auto max-h-[480px]"><table class="w-full text-xs"><thead class="sticky top-0 bg-slate-50 text-slate-600"><tr>${cols.map(c=>`<th class="text-left px-4 py-3 border-b border-slate-200 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr class="border-b border-slate-100 hover:bg-slate-50">${row.map(value=>`<td class="px-4 py-2.5 whitespace-nowrap text-slate-700">${escapeHtml(value === null ? 'NULL' : value)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${Math.max(cols.length,1)}" class="px-4 py-10 text-center text-slate-400">A consulta não retornou registros.</td></tr>`}</tbody></table></div>`; }
+function renderBIResult(data){ const card=document.getElementById('bi-result-card'); if(!card) return; const cols=data.columns||[], rows=data.rows||[]; card.innerHTML=`<div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-bold text-slate-900">Resultado: ${escapeHtml(data.nome)}</h3><p class="text-xs text-slate-500 mt-1">${rows.length} registro(s) · ${cols.length} coluna(s)</p></div><div class="flex gap-2 items-center"><button onclick="exportBIExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar Excel</button><button onclick="exportBIPdf()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar PDF</button><button onclick="closeBIResult()" title="Fechar resultado" aria-label="Fechar resultado" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3 py-2 rounded-lg flex items-center gap-1.5"><span class="text-base leading-none">×</span> Fechar</button></div></div><div class="overflow-auto max-h-[480px]"><table class="w-full text-xs"><thead class="sticky top-0 bg-slate-50 text-slate-600"><tr>${cols.map(c=>`<th class="text-left px-4 py-3 border-b border-slate-200 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr class="border-b border-slate-100 hover:bg-slate-50">${row.map(value=>`<td class="px-4 py-2.5 whitespace-nowrap text-slate-700">${escapeHtml(value === null ? 'NULL' : value)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${Math.max(cols.length,1)}" class="px-4 py-10 text-center text-slate-400">A consulta não retornou registros.</td></tr>`}</tbody></table></div>`; }
+function closeBIResult(){ const card=document.getElementById('bi-result-card'); if(card) card.innerHTML=''; biLastResult=null; }
 function exportBIExcel(){ if(!biLastResult) return; const matrix=[biLastResult.columns,...biLastResult.rows]; const ws=XLSX.utils.aoa_to_sheet(matrix); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Resultado'); XLSX.writeFile(wb,`${slugify(biLastResult.nome)}.xlsx`); }
 function exportBIPdf(){ if(!biLastResult) return; const body=[biLastResult.columns,...biLastResult.rows.map(row=>row.map(value=>value===null?'NULL':String(value)))]; pdfMake.createPdf({pageOrientation:'landscape',pageSize:'A4',content:[{text:biLastResult.nome,style:'header'},{text:`Gerado em ${new Date().toLocaleString('pt-BR')}`,fontSize:8,color:'#64748b',margin:[0,0,0,10]},{table:{headerRows:1,body},layout:'lightHorizontalLines'}],styles:{header:{fontSize:15,bold:true,color:'#0f172a'}}}).download(`${slugify(biLastResult.nome)}.pdf`); }
 function slugify(value){ return String(value||'relatorio-bi').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase() || 'relatorio-bi'; }
