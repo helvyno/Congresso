@@ -354,6 +354,17 @@ app.delete('/api/bi/:id', async (req, res) => {
   }
 });
 
+app.post('/api/bi/executar', async (req, res) => {
+  try {
+    const { nome, sql_consulta } = req.body || {};
+    const sql = validateBiSql(sql_consulta);
+    const result = await pool.query({ text: sql, values: [], rowMode: 'array' });
+    res.json({ nome: String(nome || 'Consulta BI'), columns: result.fields.map(field => field.name), rows: result.rows });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/bi/:id/executar', async (req, res) => {
   try {
     const report = await pool.query('SELECT id, nome, sql_consulta, ativo FROM relatorios_bi WHERE id = $1', [req.params.id]);
