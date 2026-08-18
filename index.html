@@ -1000,7 +1000,7 @@ function buildLayout(){
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-slate-50">
                   <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.map(f=>f.label), (!isPublicView ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
+                    ${['#'+e.pk.replace('cod','').toUpperCase(), ...tableFields.filter(f => !['hora_inicio','hora_fim'].includes(f.name)).map(f=>f.label), (!isPublicView ? 'Ações' : '')].filter(Boolean).map(h=>`<th class="px-6 py-3 bg-slate-50">${h}</th>`).join('')}
                   </tr>
                 </thead>
                 <tbody id="tabela-${e.key}"></tbody>
@@ -1148,8 +1148,7 @@ function buildLayout(){
                 <th class="px-6 py-3 bg-slate-50">Data</th>
                 <th class="px-6 py-3 bg-slate-50">Pessoa</th>
                 <th class="px-6 py-3 bg-slate-50">Setor</th>
-                <th class="px-6 py-3 bg-slate-50">Início</th>
-                <th class="px-6 py-3 bg-slate-50">Fim</th>
+                <th class="px-6 py-3 bg-slate-50">Período</th>
                 <th class="px-6 py-3 bg-slate-50">Telefone (WhatsApp)</th>
               </tr>
             </thead>
@@ -2191,8 +2190,13 @@ function renderDesignacoes(){
     const nomeSetor = setor ? escapeHtml(setor.descricao) : 'Setor não encontrado';
     const telefone = pessoa && pessoa.telefone ? pessoa.telefone : '';
     const dataFmt = formatDateBR(es.data);
-    const horaInicio = es.hora_inicio || '';
-    const horaFim = es.hora_fim || '';
+    const periodo = findRecord('periodo', es.codperiodo);
+    const periodoDescricao = periodo ? (periodo.descricao || '') : '';
+    const horarioInicial = periodo ? (periodo.horario_inicial || periodo.hora_inicio || '') : (es.hora_inicio || '');
+    const horarioFinal = periodo ? (periodo.horario_final || periodo.hora_fim || '') : (es.hora_fim || '');
+    const periodoFormatado = periodoDescricao
+      ? `${periodoDescricao} (${horarioInicial || '--:--:--'} às ${horarioFinal || '--:--:--'})`
+      : (horarioInicial || horarioFinal ? `${horarioInicial || '--:--:--'} às ${horarioFinal || '--:--:--'}` : '—');
 
     // Verifica se confirmou presença na data através da tabela listapresenca
     let presenteNoDia = true;
@@ -2222,13 +2226,12 @@ function renderDesignacoes(){
       <td class="px-6 py-4 font-mono text-blue-600">${dataFmt}</td>
       <td class="px-6 py-4 ${nomeColorClass}">${nomePessoa} ${alertaPresenca}</td>
       <td class="px-6 py-4 text-slate-700">${nomeSetor}</td>
-      <td class="px-6 py-4 font-mono text-slate-600">${horaInicio}</td>
-      <td class="px-6 py-4 font-mono text-slate-600">${horaFim}</td>
+      <td class="px-6 py-4 font-mono text-slate-600 whitespace-nowrap">${escapeHtml(periodoFormatado)}</td>
       <td class="px-6 py-4">${telLink}</td>
     </tr>`;
   }).join('');
 
-  tbody.innerHTML = rowsHtml || `<tr><td colspan="6" class="text-center text-slate-400 py-12">Nenhuma designação encontrada.</td></tr>`;
+  tbody.innerHTML = rowsHtml || `<tr><td colspan="5" class="text-center text-slate-400 py-12">Nenhuma designação encontrada.</td></tr>`;
 
   const ev = (db['evento']||[]).find(e => e.codevento == globalEventoId);
   let dateOptionsHtml = '<option value="ALL">Todas as Datas</option>';
@@ -2273,8 +2276,18 @@ async function salvarPermissaoDisponibilidade(permitida){
 }
 
 function changeDisponibilidadeSearch(value){
+  const input = document.activeElement && document.activeElement.id === 'disponibilidade-search-input' ? document.activeElement : null;
+  const cursorStart = input ? input.selectionStart : null;
+  const cursorEnd = input ? input.selectionEnd : null;
   disponibilidadeSearch = String(value || '').trim().toLowerCase();
   renderDisponibilidade();
+  const nextInput = document.getElementById('disponibilidade-search-input');
+  if(nextInput){
+    nextInput.focus({ preventScroll: true });
+    const posStart = cursorStart === null ? nextInput.value.length : Math.min(cursorStart, nextInput.value.length);
+    const posEnd = cursorEnd === null ? posStart : Math.min(cursorEnd, nextInput.value.length);
+    try { nextInput.setSelectionRange(posStart, posEnd); } catch(e) {}
+  }
 }
 
 function renderDisponibilidade(){
@@ -2316,7 +2329,7 @@ function renderDisponibilidade(){
     }).join('')).join('');
     return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="sm:sticky sm:left-0 sm:z-10 bg-white px-4 py-3 font-medium text-slate-800 whitespace-nowrap min-w-[180px]">${escapeHtml(pessoa.nomecompleto || '')}</td><td class="sm:sticky sm:left-[180px] sm:z-10 bg-white px-4 py-3 text-slate-600 whitespace-nowrap min-w-[160px]">${escapeHtml(cong?.nome_congregacao || cong?.descricao || cong?.nome || '—')}</td>${cells}</tr>`;
   }).join('');
-  tab.innerHTML = `<div class="flex-shrink-0 mb-4"><div class="flex items-start justify-between gap-4 flex-wrap mb-3"><div><h2 class="text-2xl font-bold text-slate-900 mb-1">Disponibilidade</h2><p class="text-slate-500 text-sm">Disponibilidade das pessoas por data e período do evento.</p></div><button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-sm">Atualizar Dados</button></div><div class="flex flex-col sm:flex-row gap-3 mb-3"><input type="search" value="${escapeHtml(disponibilidadeSearch)}" oninput="changeDisponibilidadeSearch(this.value)" placeholder="Pesquisar por nome ou congregação..." class="w-full sm:max-w-md bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"><span class="text-xs text-slate-500 self-center">${pessoas.length} pessoa(s) exibida(s)</span></div>${aviso}<p class="text-xs text-slate-500 mb-2 sm:hidden">Deslize a tabela horizontalmente para acessar as datas e períodos.</p></div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6"><div class="overflow-auto max-h-[calc(100vh-290px)] touch-pan-x overscroll-x-contain"><table class="min-w-max w-max text-sm border-collapse"><thead><tr><th rowspan="2" class="sm:sticky sm:left-0 sm:z-10 px-4 py-3 text-left bg-slate-50 whitespace-nowrap min-w-[180px]">Nome</th><th rowspan="2" class="sm:sticky sm:left-[180px] sm:z-10 px-4 py-3 text-left bg-slate-50 whitespace-nowrap min-w-[160px]">Congregação</th>${header}</tr><tr>${subHeader}</tr></thead><tbody>${body || `<tr><td colspan="${2 + Math.max(totalColunas, 1)}" class="px-4 py-10 text-center text-slate-400">Nenhuma pessoa cadastrada neste evento.</td></tr>`}</tbody></table></div></div>`;
+  tab.innerHTML = `<div class="flex-shrink-0 mb-4"><div class="flex items-start justify-between gap-4 flex-wrap mb-3"><div><h2 class="text-2xl font-bold text-slate-900 mb-1">Disponibilidade</h2><p class="text-slate-500 text-sm">Disponibilidade das pessoas por data e período do evento.</p></div><button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-sm">Atualizar Dados</button></div><div class="flex flex-col sm:flex-row gap-3 mb-3"><input id="disponibilidade-search-input" type="search" value="${escapeHtml(disponibilidadeSearch)}" oninput="changeDisponibilidadeSearch(this.value)" placeholder="Pesquisar por nome ou congregação..." class="w-full sm:max-w-md bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"><span class="text-xs text-slate-500 self-center">${pessoas.length} pessoa(s) exibida(s)</span></div>${aviso}<p class="text-xs text-slate-500 mb-2 sm:hidden">Deslize a tabela horizontalmente para acessar as datas e períodos.</p></div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6"><div class="overflow-auto max-h-[calc(100vh-290px)] touch-pan-x overscroll-x-contain"><table class="min-w-max w-max text-sm border-collapse"><thead><tr><th rowspan="2" class="sm:sticky sm:left-0 sm:z-10 px-4 py-3 text-left bg-slate-50 whitespace-nowrap min-w-[180px]">Nome</th><th rowspan="2" class="sm:sticky sm:left-[180px] sm:z-10 px-4 py-3 text-left bg-slate-50 whitespace-nowrap min-w-[160px]">Congregação</th>${header}</tr><tr>${subHeader}</tr></thead><tbody>${body || `<tr><td colspan="${2 + Math.max(totalColunas, 1)}" class="px-4 py-10 text-center text-slate-400">Nenhuma pessoa cadastrada neste evento.</td></tr>`}</tbody></table></div></div>`;
 }
 
 async function toggleDisponibilidade(checkbox, codpessoa, data, codperiodo){
