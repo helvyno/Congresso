@@ -357,6 +357,7 @@ const ENTITIES = [
 
 let db = {};
 let current = 'home';
+let disponibilidadeSearch = '';
 let globalEventoId = null;
 let dashboardDataFilter = 'ALL';
 let dashboardPeriodoFilter = 'ALL';
@@ -475,7 +476,7 @@ function onWelcomeEventoChange(val){
 }
 
 async function loadDB(){
-  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -500,7 +501,7 @@ async function loadDB(){
 
 async function atualizarBancoDashboard() {
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     let hasError = false;
 
@@ -734,9 +735,9 @@ function buildLayout(){
 
     const publicMenus = [
       { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
-      { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa },
+      { key: 'contagem', label: 'Contagem', icon: ICONS.contagem },
       { key: 'disponibilidade', label: 'Disponibilidade', icon: ICONS.disponibilidade },
-      { key: 'contagem', label: 'Contagem', icon: ICONS.contagem }
+      { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa }
     ];
 
     publicNav.innerHTML = publicMenus.map(m => `
@@ -1214,7 +1215,7 @@ async function showTab(key){
   if(sidebar) sidebar.classList.add('hidden');
 
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -2271,13 +2272,23 @@ async function salvarPermissaoDisponibilidade(permitida){
   }
 }
 
+function changeDisponibilidadeSearch(value){
+  disponibilidadeSearch = String(value || '').trim().toLowerCase();
+  renderDisponibilidade();
+}
+
 function renderDisponibilidade(){
   const tab = document.getElementById('tab-disponibilidade');
   if(!tab) return;
   const evId = globalEventoId;
   const ev = (db['evento'] || []).find(e => Number(e.codevento) === Number(evId));
-  const pessoas = (db['pessoa'] || []).filter(p => !evId || Number(p.codevento) === Number(evId)).sort((a,b) => String(a.nomecompleto || '').localeCompare(String(b.nomecompleto || '')));
   const congregacoes = db['congregacao'] || [];
+  const pessoas = (db['pessoa'] || []).filter(p => !evId || Number(p.codevento) === Number(evId)).filter(p => {
+    if(!disponibilidadeSearch) return true;
+    const pessoaCongId = p.codcong ?? p.codcongregacao ?? p.cod_congregacao;
+    const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoaCongId));
+    return `${p.nomecompleto || ''} ${cong?.nome_congregacao || cong?.descricao || cong?.nome || ''}`.toLowerCase().includes(disponibilidadeSearch);
+  }).sort((a,b) => String(a.nomecompleto || '').localeCompare(String(b.nomecompleto || '')));
   const periodos = db['periodo'] || [];
   const registros = (db['pessoadisponibilidade'] || []).filter(d => !evId || Number(d.codevento) === Number(evId));
   const permitida = disponibilidadePermitida();
@@ -2297,14 +2308,15 @@ function renderDisponibilidade(){
   const header = datas.map(data => `<th colspan="${periodos.length || 1}" class="px-3 py-2 text-center border-l border-slate-200 bg-slate-50 whitespace-nowrap">${formatDateBR(data)}</th>`).join('');
   const subHeader = datas.map(() => periodos.map(periodo => `<th class="px-3 py-2 text-center border-l border-slate-100 bg-slate-50 whitespace-nowrap">${escapeHtml(periodo.descricao || '')}</th>`).join('')).join('');
   const body = pessoas.map(pessoa => {
-    const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoa.codcong));
+    const pessoaCongId = pessoa.codcong ?? pessoa.codcongregacao ?? pessoa.cod_congregacao;
+    const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoaCongId));
     const cells = datas.map(data => periodos.map(periodo => {
       const marcado = registros.some(r => Number(r.codpessoa) === Number(pessoa.codpessoa) && String(r.data).split('T')[0] === data && Number(r.codperiodo) === Number(periodo.codperiodo));
       return `<td class="px-3 py-3 text-center border-l border-slate-100"><input type="checkbox" class="disponibilidade-checkbox w-5 h-5 accent-blue-600 rounded" ${marcado ? 'checked' : ''} ${permitida ? '' : 'disabled'} onchange="toggleDisponibilidade(this, ${pessoa.codpessoa}, '${data}', ${periodo.codperiodo})"></td>`;
     }).join('')).join('');
-    return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="sticky left-0 z-10 bg-white px-4 py-3 font-medium text-slate-800 whitespace-nowrap">${escapeHtml(pessoa.nomecompleto || '')}</td><td class="sticky left-[220px] z-10 bg-white px-4 py-3 text-slate-600 whitespace-nowrap">${escapeHtml(cong?.descricao || '—')}</td>${cells}</tr>`;
+    return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="sm:sticky sm:left-0 sm:z-10 bg-white px-4 py-3 font-medium text-slate-800 whitespace-nowrap min-w-[180px]">${escapeHtml(pessoa.nomecompleto || '')}</td><td class="sm:sticky sm:left-[180px] sm:z-10 bg-white px-4 py-3 text-slate-600 whitespace-nowrap min-w-[160px]">${escapeHtml(cong?.nome_congregacao || cong?.descricao || cong?.nome || '—')}</td>${cells}</tr>`;
   }).join('');
-  tab.innerHTML = `<div class="flex-shrink-0 mb-4"><div class="flex items-start justify-between gap-4 flex-wrap mb-3"><div><h2 class="text-2xl font-bold text-slate-900 mb-1">Disponibilidade</h2><p class="text-slate-500 text-sm">Disponibilidade das pessoas por data e período do evento.</p></div><button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-sm">Atualizar Dados</button></div>${aviso}</div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6"><div class="overflow-auto max-h-[calc(100vh-250px)]"><table class="min-w-max w-full text-sm border-collapse"><thead class="sticky top-0 z-20"><tr><th rowspan="2" class="sticky left-0 z-30 px-4 py-3 text-left bg-slate-50 whitespace-nowrap">Nome</th><th rowspan="2" class="sticky left-[220px] z-30 px-4 py-3 text-left bg-slate-50 whitespace-nowrap">Congregação</th>${header}</tr><tr>${subHeader}</tr></thead><tbody>${body || `<tr><td colspan="${2 + Math.max(totalColunas, 1)}" class="px-4 py-10 text-center text-slate-400">Nenhuma pessoa cadastrada neste evento.</td></tr>`}</tbody></table></div></div>`;
+  tab.innerHTML = `<div class="flex-shrink-0 mb-4"><div class="flex items-start justify-between gap-4 flex-wrap mb-3"><div><h2 class="text-2xl font-bold text-slate-900 mb-1">Disponibilidade</h2><p class="text-slate-500 text-sm">Disponibilidade das pessoas por data e período do evento.</p></div><button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-sm">Atualizar Dados</button></div><div class="flex flex-col sm:flex-row gap-3 mb-3"><input type="search" value="${escapeHtml(disponibilidadeSearch)}" oninput="changeDisponibilidadeSearch(this.value)" placeholder="Pesquisar por nome ou congregação..." class="w-full sm:max-w-md bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"><span class="text-xs text-slate-500 self-center">${pessoas.length} pessoa(s) exibida(s)</span></div>${aviso}<p class="text-xs text-slate-500 mb-2 sm:hidden">Deslize a tabela horizontalmente para acessar as datas e períodos.</p></div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6"><div class="overflow-auto max-h-[calc(100vh-290px)] touch-pan-x overscroll-x-contain"><table class="min-w-max w-max text-sm border-collapse"><thead><tr><th rowspan="2" class="sm:sticky sm:left-0 sm:z-10 px-4 py-3 text-left bg-slate-50 whitespace-nowrap min-w-[180px]">Nome</th><th rowspan="2" class="sm:sticky sm:left-[180px] sm:z-10 px-4 py-3 text-left bg-slate-50 whitespace-nowrap min-w-[160px]">Congregação</th>${header}</tr><tr>${subHeader}</tr></thead><tbody>${body || `<tr><td colspan="${2 + Math.max(totalColunas, 1)}" class="px-4 py-10 text-center text-slate-400">Nenhuma pessoa cadastrada neste evento.</td></tr>`}</tbody></table></div></div>`;
 }
 
 async function toggleDisponibilidade(checkbox, codpessoa, data, codperiodo){
