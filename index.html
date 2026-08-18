@@ -359,6 +359,11 @@ let db = {};
 let current = 'home';
 let disponibilidadeSearch = '';
 let globalEventoId = null;
+
+// Normaliza textos somente para pesquisa: ignora acentos e diferenças entre maiúsculas/minúsculas.
+function normalizeSearchText(value){
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 let dashboardDataFilter = 'ALL';
 let dashboardPeriodoFilter = 'ALL';
 let relatorioDataFilter = 'ALL';
@@ -2174,11 +2179,11 @@ function renderDesignacoes(){
     escalasFiltradas = escalasFiltradas.filter(es => String(es.codperiodo) === String(designacaoPeriodoFilter));
   }
 
-  const searchQuery = (window._designacaoSearchPessoa || '').toLowerCase();
+  const searchQuery = normalizeSearchText(window._designacaoSearchPessoa || '');
   if (searchQuery) {
     escalasFiltradas = escalasFiltradas.filter(es => {
       const pessoa = findRecord('pessoa', es.codpessoa);
-      const nome = pessoa ? pessoa.nomecompleto.toLowerCase() : '';
+      const nome = pessoa ? normalizeSearchText(pessoa.nomecompleto) : '';
       return nome.includes(searchQuery);
     });
   }
@@ -2279,7 +2284,7 @@ function changeDisponibilidadeSearch(value){
   const input = document.activeElement && document.activeElement.id === 'disponibilidade-search-input' ? document.activeElement : null;
   const cursorStart = input ? input.selectionStart : null;
   const cursorEnd = input ? input.selectionEnd : null;
-  disponibilidadeSearch = String(value || '').trim().toLowerCase();
+  disponibilidadeSearch = normalizeSearchText(String(value || '').trim());
   renderDisponibilidade();
   const nextInput = document.getElementById('disponibilidade-search-input');
   if(nextInput){
@@ -2300,7 +2305,7 @@ function renderDisponibilidade(){
     if(!disponibilidadeSearch) return true;
     const pessoaCongId = p.codcong ?? p.codcongregacao ?? p.cod_congregacao;
     const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoaCongId));
-    return `${p.nomecompleto || ''} ${cong?.nome_congregacao || cong?.descricao || cong?.nome || ''}`.toLowerCase().includes(disponibilidadeSearch);
+    return normalizeSearchText(`${p.nomecompleto || ''} ${cong?.nome_congregacao || cong?.descricao || cong?.nome || ''}`).includes(disponibilidadeSearch);
   }).sort((a,b) => String(a.nomecompleto || '').localeCompare(String(b.nomecompleto || '')));
   const periodos = db['periodo'] || [];
   const registros = (db['pessoadisponibilidade'] || []).filter(d => !evId || Number(d.codevento) === Number(evId));
@@ -2393,11 +2398,11 @@ function renderPresenca(){
 
   pessoas.sort((a, b) => a.nomecompleto.localeCompare(b.nomecompleto));
 
-  const searchQuery = (window._presencaSearch || '').toLowerCase();
+  const searchQuery = normalizeSearchText(window._presencaSearch || '');
   if (searchQuery) {
     pessoas = pessoas.filter(p => {
-      const nome = (p.nomecompleto || '').toLowerCase();
-      const tel = (p.telefone || '').toLowerCase();
+      const nome = normalizeSearchText(p.nomecompleto || '');
+      const tel = normalizeSearchText(p.telefone || '');
       return nome.includes(searchQuery) || tel.includes(searchQuery);
     });
   }
@@ -2704,7 +2709,7 @@ function updateCounts(){
 }
 
 function onSearch(key, value){
-  entity(key)._search = value.toLowerCase();
+  entity(key)._search = normalizeSearchText(value);
   renderTable(key);
 }
 
@@ -2809,7 +2814,7 @@ function renderTable(key){
       return ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade').some(f=>{
         let v = f.type==='fk' ? refLabel(f.ref, r[f.name]) : r[f.name];
         if(f.type==='date') v = formatDateBR(v);
-        return String(v||'').toLowerCase().includes(q);
+        return normalizeSearchText(v||'').includes(q);
       }) || String(r[ent.pk]).includes(q);
     });
   }
@@ -3183,9 +3188,9 @@ function getSearchFkList(fieldName) {
 function showSearchFkDropdown(fieldName) {
   const dropdown = document.getElementById(`search-fk-dropdown-${fieldName}`);
   if(!dropdown) return;
-  const query = document.getElementById(`search-fk-input-${fieldName}`).value.toLowerCase();
+  const query = normalizeSearchText(document.getElementById(`search-fk-input-${fieldName}`).value);
   const refList = getSearchFkList(fieldName);
-  const filtered = refList.filter(r => r.nomecompleto.toLowerCase().includes(query));
+  const filtered = refList.filter(r => normalizeSearchText(r.nomecompleto).includes(query));
 
   if(filtered.length === 0){
     dropdown.innerHTML = '<div class="px-4 py-2.5 text-xs text-slate-400">Nenhuma pessoa encontrada</div>';
