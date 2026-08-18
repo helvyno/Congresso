@@ -112,7 +112,7 @@
       <img src="logo.jpg" alt="Logo DATASABE" class="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-200 bg-white">
       <div>
         <h1 class="text-lg font-bold text-slate-900 tracking-tight">Gestão de Indicadores</h1>
-        <p class="text-xs text-slate-500 hidden sm:block">DATASABE Sistemas</p>
+        <p id="header-event-name" class="text-xs text-slate-500 hidden sm:block">Selecione um evento</p>
       </div>
     </div>
 
@@ -262,6 +262,7 @@ const ICONS = {
   parametros: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>',
   mapa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>',
   presenca: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
+  disponibilidade: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zm3 10l2 2 4-4"></path>',
   bi: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8"></path>'
 };
 
@@ -291,6 +292,7 @@ const ENTITIES = [
   { key:'designacoes', label:'Designação', plural:'Designações', isCustom:true },
   { key:'mapa', label:'Mapa', plural:'Mapa do Evento', isCustomMap:true },
   { key:'presenca', label:'Presença', plural:'Lista de Presença', isCustomPresenca:true },
+  { key:'disponibilidade', label:'Disponibilidade', plural:'Disponibilidade', isCustomDisponibilidade:true },
   { key:'evento', label:'Evento', plural:'Eventos', pk:'codevento', display:r=>r.descricao, fields:[
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Congresso Regional 2026'},
     {name:'data_inicio', label:'Data início', type:'date', required:true},
@@ -386,7 +388,7 @@ function escapeHtml(str){
 }
 
 async function apiList(table){
-  const query = table === 'bi' && globalEventoId ? `?codevento=${encodeURIComponent(globalEventoId)}` : '';
+  const query = (table === 'bi' || table === 'pessoadisponibilidade') && globalEventoId ? `?codevento=${encodeURIComponent(globalEventoId)}` : '';
   const r = await fetch(`${API_BASE}/api/${table}${query}`);
   if(!r.ok) {
     const errorData = await r.json().catch(() => ({}));
@@ -526,6 +528,13 @@ async function atualizarBancoDashboard() {
   }
 }
 
+function updateHeaderEventoName(){
+  const headerEventName = document.getElementById('header-event-name');
+  if(!headerEventName) return;
+  const eventoAtual = (db['evento'] || []).find(evento => Number(evento.codevento) === Number(globalEventoId));
+  headerEventName.textContent = eventoAtual ? eventoAtual.descricao : 'Selecione um evento';
+}
+
 function initGlobalEvento(){
   const eventos = db['evento'] || [];
   const selectWelcome = document.getElementById('welcome-evento-select');
@@ -542,6 +551,7 @@ function initGlobalEvento(){
   }
   selectHeader.value = globalEventoId;
   if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
+  updateHeaderEventoName();
   onWelcomeEventoChange(globalEventoId);
   updateDashboardDateOptions();
 }
@@ -672,13 +682,17 @@ function updateDashboardDateOptions(){
 
 async function changeGlobalEvento(val){
   globalEventoId = val ? Number(val) : null;
+  updateHeaderEventoName();
   const selectWelcome = document.getElementById('welcome-evento-select');
   if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
 
   updateDashboardDateOptions();
   if(globalEventoId){
-    try { db.bi = await apiList('bi'); }
-    catch(err){ db.bi = []; showToast('Não foi possível carregar os relatórios do evento: ' + err.message); }
+    try {
+      db.bi = await apiList('bi');
+      db.pessoadisponibilidade = await apiList('pessoadisponibilidade');
+    }
+    catch(err){ showToast('Não foi possível carregar os dados do evento: ' + err.message); }
   } else {
     db.bi = [];
   }
@@ -721,6 +735,7 @@ function buildLayout(){
     const publicMenus = [
       { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
       { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa },
+      { key: 'disponibilidade', label: 'Disponibilidade', icon: ICONS.disponibilidade },
       { key: 'contagem', label: 'Contagem', icon: ICONS.contagem }
     ];
 
@@ -741,7 +756,7 @@ function buildLayout(){
       <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[e.key] || ICONS.evento}</svg>
         <span class="truncate">${e.plural}</span>
-        ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
+        ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
       </button>
     `).join('');
   }
@@ -762,8 +777,10 @@ function buildLayout(){
       return `<div id="tab-mapa" class="tab-content overflow-y-auto ${current==='mapa'?'active':''}"></div>`;
     }
     if(e.isCustomPresenca){
-      if(isPublicView) return '';
       return `<div id="tab-presenca" class="tab-content overflow-y-auto ${current==='presenca'?'active':''}"></div>`;
+    }
+    if(e.isCustomDisponibilidade){
+      return `<div id="tab-disponibilidade" class="tab-content overflow-y-auto ${current==='disponibilidade'?'active':''}"></div>`;
     }
     if(e.isBI){
       if(isPublicView) return '';
@@ -860,8 +877,18 @@ function buildLayout(){
               </div>
               <div class="flex items-center gap-3">
                 <input type="file" id="map-file-input" accept="image/*" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
-                <button onclick="salvarNovoMapa()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">Salvar Imagem</button>
+                <button onclick="salvarNovoMapa()" class="bg-emerald-600 hover:bg-emerald-700 text-xs font-medium px-4 py-2 rounded-lg transition-colors shadow-sm bg-emerald-600 text-white">Salvar Imagem</button>
               </div>
+            </div>
+            <div class="mb-6 bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm">
+              <div>
+                <h4 class="text-sm font-bold text-slate-900 mb-1">Permite informar disponibilidade</h4>
+                <p class="text-xs text-slate-500">Quando ativado, as datas e períodos da tela Disponibilidade poderão ser marcados e desmarcados.</p>
+              </div>
+              <label class="inline-flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="permite-disponibilidade-checkbox" onchange="salvarPermissaoDisponibilidade(this.checked)" class="w-5 h-5 accent-blue-600 rounded" ${((db['evento']||[]).find(ev => ev.codevento == globalEventoId)?.permite_disponibilidade === true || String((db['evento']||[]).find(ev => ev.codevento == globalEventoId)?.permite_disponibilidade).toLowerCase() === 'true') ? 'checked' : ''}>
+                <span class="text-sm font-semibold text-slate-700">Permitir edição</span>
+              </label>
             </div>
           ` : ''}
 
@@ -1180,7 +1207,7 @@ async function showTab(key){
   if(isPublicView && (key === 'home' || key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
   current = key;
   const mainContent = document.getElementById('main-content');
-  const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'pessoa', 'escalas', 'contagem'];
+  const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'disponibilidade', 'pessoa', 'escalas', 'contagem'];
   if(mainContent) mainContent.classList.toggle('page-scroll-mode', pageScrollTabs.includes(key));
   sidebarOpen = false;
   const sidebar = document.getElementById('sidebar-nav');
@@ -1227,6 +1254,8 @@ function renderCurrentTab(){
     renderMapa();
     } else if(current === 'presenca'){
       renderPresenca();
+    } else if(current === 'disponibilidade'){
+      renderDisponibilidade();
     } else if(current === 'bi'){
       renderBI();
     } else {
@@ -2220,6 +2249,77 @@ function renderDesignacoes(){
   const periodosOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(designacaoPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
   const periodoSelectEl = document.getElementById('designacao-periodo-filter');
   if(periodoSelectEl) periodoSelectEl.innerHTML = periodosOptionsHtml;
+}
+
+function disponibilidadePermitida(){
+  const ev = (db['evento'] || []).find(e => Number(e.codevento) === Number(globalEventoId));
+  return ev && (ev.permite_disponibilidade === true || String(ev.permite_disponibilidade).toLowerCase() === 'true' || Number(ev.permite_disponibilidade) === 1);
+}
+
+async function salvarPermissaoDisponibilidade(permitida){
+  if(!globalEventoId) return;
+  const checkbox = document.getElementById('permite-disponibilidade-checkbox');
+  try {
+    const atualizado = await apiUpdate('evento', globalEventoId, { permite_disponibilidade: !!permitida });
+    const idx = (db['evento'] || []).findIndex(e => Number(e.codevento) === Number(globalEventoId));
+    if(idx >= 0) db['evento'][idx] = { ...db['evento'][idx], ...(atualizado || {}), permite_disponibilidade: !!permitida };
+    renderDisponibilidade();
+    showToast(permitida ? 'Edição de disponibilidade liberada.' : 'Edição de disponibilidade bloqueada.');
+  } catch(err) {
+    if(checkbox) checkbox.checked = !permitida;
+    showToast('Erro ao salvar permissão: ' + err.message);
+  }
+}
+
+function renderDisponibilidade(){
+  const tab = document.getElementById('tab-disponibilidade');
+  if(!tab) return;
+  const evId = globalEventoId;
+  const ev = (db['evento'] || []).find(e => Number(e.codevento) === Number(evId));
+  const pessoas = (db['pessoa'] || []).filter(p => !evId || Number(p.codevento) === Number(evId)).sort((a,b) => String(a.nomecompleto || '').localeCompare(String(b.nomecompleto || '')));
+  const congregacoes = db['congregacao'] || [];
+  const periodos = db['periodo'] || [];
+  const registros = (db['pessoadisponibilidade'] || []).filter(d => !evId || Number(d.codevento) === Number(evId));
+  const permitida = disponibilidadePermitida();
+  let datas = [];
+  if(ev && ev.data_inicio && ev.data_final){
+    let cursor = new Date(ev.data_inicio.split('T')[0] + 'T00:00:00');
+    const fim = new Date(ev.data_final.split('T')[0] + 'T00:00:00');
+    while(cursor <= fim){
+      datas.push(cursor.toISOString().split('T')[0]);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  const totalColunas = datas.length * periodos.length;
+  const aviso = !permitida
+    ? '<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">A informação de disponibilidade está bloqueada pelos parâmetros do evento.</div>'
+    : '<div class="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">Marque os dias e períodos em que cada pessoa estará disponível.</div>';
+  const header = datas.map(data => `<th colspan="${periodos.length || 1}" class="px-3 py-2 text-center border-l border-slate-200 bg-slate-50 whitespace-nowrap">${formatDateBR(data)}</th>`).join('');
+  const subHeader = datas.map(() => periodos.map(periodo => `<th class="px-3 py-2 text-center border-l border-slate-100 bg-slate-50 whitespace-nowrap">${escapeHtml(periodo.descricao || '')}</th>`).join('')).join('');
+  const body = pessoas.map(pessoa => {
+    const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoa.codcong));
+    const cells = datas.map(data => periodos.map(periodo => {
+      const marcado = registros.some(r => Number(r.codpessoa) === Number(pessoa.codpessoa) && String(r.data).split('T')[0] === data && Number(r.codperiodo) === Number(periodo.codperiodo));
+      return `<td class="px-3 py-3 text-center border-l border-slate-100"><input type="checkbox" class="disponibilidade-checkbox w-5 h-5 accent-blue-600 rounded" ${marcado ? 'checked' : ''} ${permitida ? '' : 'disabled'} onchange="toggleDisponibilidade(this, ${pessoa.codpessoa}, '${data}', ${periodo.codperiodo})"></td>`;
+    }).join('')).join('');
+    return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="sticky left-0 z-10 bg-white px-4 py-3 font-medium text-slate-800 whitespace-nowrap">${escapeHtml(pessoa.nomecompleto || '')}</td><td class="sticky left-[220px] z-10 bg-white px-4 py-3 text-slate-600 whitespace-nowrap">${escapeHtml(cong?.descricao || '—')}</td>${cells}</tr>`;
+  }).join('');
+  tab.innerHTML = `<div class="flex-shrink-0 mb-4"><div class="flex items-start justify-between gap-4 flex-wrap mb-3"><div><h2 class="text-2xl font-bold text-slate-900 mb-1">Disponibilidade</h2><p class="text-slate-500 text-sm">Disponibilidade das pessoas por data e período do evento.</p></div><button onclick="atualizarBancoDashboard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-sm">Atualizar Dados</button></div>${aviso}</div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-h-0 mb-6"><div class="overflow-auto max-h-[calc(100vh-250px)]"><table class="min-w-max w-full text-sm border-collapse"><thead class="sticky top-0 z-20"><tr><th rowspan="2" class="sticky left-0 z-30 px-4 py-3 text-left bg-slate-50 whitespace-nowrap">Nome</th><th rowspan="2" class="sticky left-[220px] z-30 px-4 py-3 text-left bg-slate-50 whitespace-nowrap">Congregação</th>${header}</tr><tr>${subHeader}</tr></thead><tbody>${body || `<tr><td colspan="${2 + Math.max(totalColunas, 1)}" class="px-4 py-10 text-center text-slate-400">Nenhuma pessoa cadastrada neste evento.</td></tr>`}</tbody></table></div></div>`;
+}
+
+async function toggleDisponibilidade(checkbox, codpessoa, data, codperiodo){
+  if(!disponibilidadePermitida()) { checkbox.checked = !checkbox.checked; return; }
+  const evId = globalEventoId;
+  const atuais = (db['pessoadisponibilidade'] || []).filter(r => Number(r.codevento) === Number(evId) && Number(r.codpessoa) === Number(codpessoa));
+  const chave = r => `${String(r.data).split('T')[0]}-${r.codperiodo}`;
+  const mapa = new Map(atuais.map(r => [chave(r), { codpessoa: codpessoa, codevento: evId, data: String(r.data).split('T')[0], codperiodo: r.codperiodo }]));
+  const itemChave = `${data}-${codperiodo}`;
+  if(checkbox.checked) mapa.set(itemChave, { codpessoa: codpessoa, codevento: evId, data, codperiodo }); else mapa.delete(itemChave);
+  try {
+    await fetch(`${API_BASE}/api/pessoadisponibilidade/salvar`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ codpessoa, codevento: evId, disponibilidades: Array.from(mapa.values()) }) }).then(async r => { const payload = await r.json().catch(() => ({})); if(!r.ok) throw new Error(payload.error || 'Falha ao salvar disponibilidade.'); return payload; });
+    db['pessoadisponibilidade'] = await apiList('pessoadisponibilidade');
+    showToast('Disponibilidade atualizada.');
+  } catch(err) { checkbox.checked = !checkbox.checked; showToast('Erro ao salvar disponibilidade: ' + err.message); }
 }
 
 function renderPresenca(){
@@ -3352,7 +3452,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
       await fetch(`${API_BASE}/api/pessoadisponibilidade/salvar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codpessoa: Number(savedRecordId), disponibilidades: novasDisponibilidades })
+        body: JSON.stringify({ codpessoa: Number(savedRecordId), codevento: globalEventoId, disponibilidades: novasDisponibilidades })
       });
 
       const dispRes = await apiList('pessoadisponibilidade');

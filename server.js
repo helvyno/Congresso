@@ -52,7 +52,11 @@ app.post('/api/configmapa/salvar', async (req, res) => {
 // Rotas de Disponibilidade de Pessoas
 app.get('/api/pessoadisponibilidade', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM pessoadisponibilidade');
+    const { codevento } = req.query;
+    const query = codevento
+      ? { text: 'SELECT * FROM pessoadisponibilidade WHERE codevento = $1 ORDER BY codpessoa ASC, data ASC, codperiodo ASC', values: [codevento] }
+      : { text: 'SELECT * FROM pessoadisponibilidade ORDER BY codpessoa ASC, data ASC, codperiodo ASC', values: [] };
+    const { rows } = await pool.query(query);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -64,12 +68,14 @@ app.post('/api/pessoadisponibilidade/salvar', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM pessoadisponibilidade WHERE codpessoa = $1', [codpessoa]);
+    const codevento = disponibilidades.length > 0 ? disponibilidades[0].codevento : req.body.codevento;
+    if (!codevento) throw new Error('O evento da disponibilidade é obrigatório.');
+    await client.query('DELETE FROM pessoadisponibilidade WHERE codpessoa = $1 AND codevento = $2', [codpessoa, codevento]);
     
     for (const d of disponibilidades) {
       await client.query(
         'INSERT INTO pessoadisponibilidade (codpessoa, codevento, data, codperiodo) VALUES ($1, $2, $3, $4)',
-        [d.codpessoa, d.codevento, d.data, d.codperiodo]
+        [d.codpessoa || codpessoa, d.codevento || codevento, d.data, d.codperiodo]
       );
     }
     await client.query('COMMIT');
