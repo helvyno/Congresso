@@ -159,6 +159,65 @@ app.delete('/api/listapresenca/:id', async (req, res) => {
   }
 });
 
+
+// Geração automática de escalas: um Indicador disponível por setor pendente,
+// sem reutilizar pessoas que já tenham qualquer escala no evento.
+app.post('/api/escalas/automaticas', async (req, res) => {
+  const codevento = Number(req.body?.codevento);
+  const data = String(req.body?.data || '');
+  const codperiodo = Number(req.body?.codperiodo);
+  if (!Number.isInteger(codevento) || codevento <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(data) || !Number.isInteger(codperiodo) || codperiodo <= 0) {
+    return res.status(400).json({ error: 'Informe evento, data e período válidos.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const event = await client.query('SELECT data_inicio, data_final FROM evento WHERE codevento = $1', [codevento]);
+    if (!event.rows.length) throw new Error('Evento não encontrado.');
+    const ev = event.rows[0];
+    if (ev.data_inicio && data < String(ev.data_inicio).slice(0, 10) || ev.data_final && data > String(ev.data_final).slice(0, 10)) {
+      throw new Error('A data informada está fora do período do evento.');
+    }
+    const period = await client.query('SELECT horario_inicial, horario_final, descricao FROM periodo WHERE codperiodo = $1', [codperiodo]);
+    if (!period.rows.length) throw new Error('Período não encontrado.');
+    const periodo = period.rows[0];
+    const setores = await client.query('SELECT codsetor, descricao FROM setor WHERE codevento = $1 ORDER BY codsetor ASC', [codevento]);
+    const existentes = await client.query('SELECT codsetor FROM escalas WHERE codevento = $1 AND data::date = $2::date AND codperiodo = $3', [codevento, data, codperiodo]);
+    const setoresPendentes = new Set(setores.rows.map(s => Number(s.codsetor)));
+    existentes.rows.forEach(row => setoresPendentes.delete(Number(row.codsetor)));
+    if (!setoresPendentes.size) { await client.query('COMMIT'); return res.json({ criadas: 0, escalas: [], setores_pendentes: [] }); }
+
+    const pessoas = await client.query(`
+      SELECT p.codpessoa, p.nomecompleto
+      FROM pessoa p
+      JOIN perfil pf ON pf.codperfil = p.codperfil
+      WHERE p.codevento = $1 AND UPPER(pf.descricao) = 'INDICADOR'
+        AND NOT EXISTS (SELECT 1 FROM escalas e WHERE e.codevento = $1 AND e.codpessoa = p.codpessoa)
+        AND EXISTS (
+          SELECT 1 FROM pessoadisponibilidade d
+          LEFT JOIN periodo pd ON pd.codperiodo = d.codperiodo
+          WHERE d.codevento = $1 AND d.codpessoa = p.codpessoa AND d.data::date = $2::date
+            AND (d.codperiodo = $3 OR UPPER(COALESCE(pd.descricao, '')) = 'INTEGRAL')
+        )
+      ORDER BY p.codpessoa ASC
+    `, [codevento, data, codperiodo]);
+    const usados = new Set();
+    const criadas = [];
+    for (const setorId of setoresPendentes) {
+      const pessoa = pessoas.rows.find(p => !usados.has(Number(p.codpessoa)));
+      if (!pessoa) continue;
+      usados.add(Number(pessoa.codpessoa));
+      const inserted = await client.query(`INSERT INTO escalas (codevento, data, codperiodo, codpessoa, codsetor, hora_inicio, hora_fim) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`, [codevento, data, codperiodo, pessoa.codpessoa, setorId, periodo.horario_inicial || null, periodo.horario_final || null]);
+      criadas.push(inserted.rows[0]);
+    }
+    await client.query('COMMIT');
+    res.json({ criadas: criadas.length, escalas: criadas, setores_pendentes: [...setoresPendentes].filter(id => !criadas.some(e => Number(e.codsetor) === id)) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: err.message });
+  } finally { client.release(); }
+});
+
 // Rotas genéricas para as demais tabelas do sistema
 const tables = [
   'evento', 'setor', 'congregacao', 'privilegio', 

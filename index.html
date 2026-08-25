@@ -535,6 +535,14 @@ async function atualizarBancoDashboard() {
 function updateHeaderEventoName(){
   const headerEventName = document.getElementById('header-event-name');
   if(!headerEventName) return;
+  if(currentUser){
+    const nome = String(currentUser.nomecompleto || '').trim().split(/\s+/)[0] || 'Usuário';
+    const pessoaCongId = currentUser.codcong ?? currentUser.codcongregacao ?? currentUser.cod_congregacao;
+    const cong = (db.congregacao || []).find(c => Number(c.codcong) === Number(pessoaCongId));
+    const congregacao = cong?.nome_congregacao || cong?.descricao || cong?.nome || 'Congregação não informada';
+    headerEventName.textContent = `${nome.toUpperCase()} - ${congregacao.toUpperCase()}`;
+    return;
+  }
   const eventoAtual = (db['evento'] || []).find(evento => Number(evento.codevento) === Number(globalEventoId));
   headerEventName.textContent = eventoAtual ? eventoAtual.descricao : 'Selecione um evento';
 }
@@ -855,6 +863,14 @@ function buildLayout(){
           </div>
 
           ${!isPublicView ? `
+            <div class="mb-6 bg-white border border-blue-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm bg-blue-50/40">
+              <div class="min-w-[220px]"><h4 class="text-sm font-bold text-slate-900 mb-1">Escala automática</h4><p class="text-xs text-slate-500">Gera uma escala por setor usando somente Indicadores disponíveis que ainda não foram escalados no evento.</p></div>
+              <div class="flex items-end gap-3 flex-wrap">
+                <div><label class="block text-[11px] font-medium text-slate-600 mb-1">Data</label><input id="escala-auto-data" type="date" min="${((db.evento||[]).find(ev=>Number(ev.codevento)===Number(globalEventoId))?.data_inicio||'').split('T')[0]}" max="${((db.evento||[]).find(ev=>Number(ev.codevento)===Number(globalEventoId))?.data_final||'').split('T')[0]}" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm"></div>
+                <div><label class="block text-[11px] font-medium text-slate-600 mb-1">Período</label><select id="escala-auto-periodo" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm"><option value="">Selecione...</option>${(db.periodo||[]).map(per=>`<option value="${per.codperiodo}">${escapeHtml(per.descricao)}</option>`).join('')}</select></div>
+                <button type="button" onclick="gerarEscalaAutomatica()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Gerar escala</button>
+              </div>
+            </div>
             <div class="mb-6 bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4 flex-shrink-0 shadow-sm">
               <div>
                 <h4 class="text-sm font-bold text-slate-900 mb-1">Atualizar Imagem do Mapa</h4>
@@ -1183,10 +1199,10 @@ function buildLayout(){
     `;
   }
 
-  renderCurrentTab();
+    renderCurrentTab();
   updateCounts();
+  updateHeaderEventoName();
 }
-
 async function showTab(key){
   if(isPublicView && (key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
   current = key;
@@ -2318,6 +2334,20 @@ async function salvarPermissaoDisponibilidade(permitida){
   }
 }
 
+async function gerarEscalaAutomatica(){
+  const data = document.getElementById('escala-auto-data')?.value;
+  const codperiodo = Number(document.getElementById('escala-auto-periodo')?.value);
+  if(!globalEventoId || !data || !codperiodo){ showToast('Informe a data e o período para gerar a escala.'); return; }
+  try{
+    const response = await fetch(`${API_BASE}/api/escalas/automaticas`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codevento:Number(globalEventoId), data, codperiodo})});
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error || 'Não foi possível gerar a escala automática.');
+    db.escalas = await apiList('escalas');
+    renderCurrentTab(); updateCounts();
+    showToast(result.criadas ? `${result.criadas} escala(s) gerada(s) com sucesso.` : 'Nenhuma escala nova foi gerada para os setores informados.');
+  }catch(err){ showToast('Erro ao gerar escala automática: ' + err.message); }
+}
+
 function changeDisponibilidadeSearch(value){
   const input = document.activeElement && document.activeElement.id === 'disponibilidade-search-input' ? document.activeElement : null;
   const cursorStart = input ? input.selectionStart : null;
@@ -2341,6 +2371,7 @@ function renderDisponibilidade(){
   const mostrarTelefone = !isPublicView;
   const congregacoes = db['congregacao'] || [];
   const pessoas = (db['pessoa'] || []).filter(p => !evId || Number(p.codevento) === Number(evId)).filter(p => {
+    if(isIndicatorAccess && currentUser && Number(p.codpessoa) !== Number(currentUser.codpessoa)) return false;
     if(!disponibilidadeSearch) return true;
     const pessoaCongId = p.codcong ?? p.codcongregacao ?? p.cod_congregacao;
     const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoaCongId));
