@@ -612,7 +612,7 @@ async function autenticarUsuarioSistema(){
     accessProfile = data.perfil || '';
     isIndicatorAccess = isProfile(accessProfile, 'Indicador');
     isPublicView = isIndicatorAccess;
-    current = isIndicatorAccess ? 'presenca' : 'home';
+    current = isIndicatorAccess ? 'designacoes' : 'home';
     document.getElementById('welcome-screen')?.classList.add('hidden');
     await loadDB();
   }catch(err){
@@ -734,7 +734,8 @@ function buildLayout(){
     publicNav.classList.add('flex');
 
     const publicMenus = [
-      ...(isIndicatorAccess ? [{ key: 'presenca', label: 'Lista de Presença', icon: ICONS.presenca }] : []),
+      // Lista de Presença permanece disponível apenas nos acessos administrativos; o Indicador inicia e trabalha pela tela Escalas.
+      ...([]),
       { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
       { key: 'contagem', label: 'Contagem', icon: ICONS.contagem },
       { key: 'disponibilidade', label: 'Disponibilidade', icon: ICONS.disponibilidade },
@@ -1122,7 +1123,7 @@ function buildLayout(){
     `;
   }).join('');
 
-  if (isPublicView && (current === 'home' || current === 'relatorios')) current = 'presenca';
+  if (isPublicView && (current === 'home' || current === 'relatorios' || current === 'presenca' || current === 'escalas')) current = 'designacoes';
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca).forEach(e=>{ e._search=''; });
   
   const tabDes = document.getElementById('tab-designacoes');
@@ -2237,7 +2238,7 @@ function renderDesignacoes(){
 
     const perA = refRelationDescricao('periodo', a.codperiodo);
     const perB = refRelationDescricao('periodo', b.codperiodo);
-    if (perA !== perB) return perA.localeCompare(perA);
+    if (perA !== perB) return perA.localeCompare(perB);
 
     const pessoaA = refRelationDescricao('pessoa', a.codpessoa);
     const pessoaB = refRelationDescricao('pessoa', b.codpessoa);
@@ -2246,7 +2247,7 @@ function renderDesignacoes(){
 
   let escalasFiltradas = escalas;
   if (designacaoDataFilter && designacaoDataFilter !== 'ALL') {
-    escalasFiltradas = escalasFiltradas.filter(es => es.data.split('T')[0] === designacaoDataFilter);
+    escalasFiltradas = escalasFiltradas.filter(es => dateOnly(es.data) === designacaoDataFilter);
   }
   if (designacaoPeriodoFilter && designacaoPeriodoFilter !== 'ALL') {
     escalasFiltradas = escalasFiltradas.filter(es => String(es.codperiodo) === String(designacaoPeriodoFilter));
@@ -2256,8 +2257,10 @@ function renderDesignacoes(){
   if (searchQuery) {
     escalasFiltradas = escalasFiltradas.filter(es => {
       const pessoa = findRecord('pessoa', es.codpessoa);
-      const nome = pessoa ? normalizeSearchText(pessoa.nomecompleto) : '';
-      return nome.includes(searchQuery);
+      const setor = findRecord('setor', es.codsetor);
+      const nomePessoa = pessoa ? normalizeSearchText(pessoa.nomecompleto) : '';
+      const nomeSetor = setor ? normalizeSearchText(setor.descricao) : '';
+      return nomePessoa.includes(searchQuery) || nomeSetor.includes(searchQuery);
     });
   }
 
@@ -2918,7 +2921,7 @@ function renderTable(key){
 
       const perA = refRelationDescricao('periodo', a.codperiodo);
       const perB = refRelationDescricao('periodo', b.codperiodo);
-      if (perA !== perB) return perA.localeCompare(perA);
+      if (perA !== perB) return perA.localeCompare(perB);
 
       const pessoaA = refRelationDescricao('pessoa', a.codpessoa);
       const pessoaB = refRelationDescricao('pessoa', b.codpessoa);
@@ -2953,11 +2956,17 @@ function renderTable(key){
   if(ent._search){
     const q = ent._search;
     rows = rows.filter(r=>{
-      return ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade').some(f=>{
+      const camposRelacionados = ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade').map(f=>{
         let v = (f.type === 'fk' || f.type === 'search_fk') ? refLabel(f.ref, r[f.name]) : r[f.name];
         if(f.type==='date') v = formatDateBR(v);
-        return normalizeSearchText(v||'').includes(q);
-      }) || String(r[ent.pk]).includes(q);
+        return normalizeSearchText(v||'');
+      });
+      // Reforça explicitamente a pesquisa da tela Escalas pelos nomes da pessoa e do setor.
+      if(key === 'escalas'){
+        camposRelacionados.push(normalizeSearchText(pessoaNomeEscala(r.codpessoa)));
+        camposRelacionados.push(normalizeSearchText(setorDescricaoEscala(r.codsetor)));
+      }
+      return camposRelacionados.some(v=>v.includes(q)) || String(r[ent.pk]).includes(q);
     });
   }
 
