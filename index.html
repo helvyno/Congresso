@@ -1271,18 +1271,47 @@ function renderQRCode(){
   tab.innerHTML = `<div class="max-w-2xl mx-auto w-full space-y-5"><div><p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Acesso público</p><h2 class="text-2xl font-bold text-slate-900">QRCode</h2><p class="text-sm text-slate-500 mt-1">Gere o acesso rápido ao cadastro público de pessoa para o evento selecionado.</p></div><section class="bg-white rounded-xl border border-slate-200 shadow-sm p-6"><div class="grid gap-4 sm:grid-cols-2 items-end"><div><label class="block text-xs font-medium text-slate-600 mb-1.5">Data</label><input value="${displayDate}" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700"></div><button onclick="gerarQRCode()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg shadow-sm">Gerar QRCode</button></div><div class="mt-5 rounded-xl bg-slate-50 border border-dashed border-slate-300 p-6 text-center"><p class="text-sm font-semibold text-slate-800">${escapeHtml(eventLabel)}</p><canvas id="qrcode-canvas" class="mx-auto mt-4 bg-white p-3 rounded-lg"></canvas><p id="qrcode-url" class="text-[11px] text-slate-500 break-all mt-4">Clique em Gerar QRCode para criar o acesso.</p></div></section></div>`;
 }
 
-function gerarQRCode(){
+function carregarBibliotecaQRCode(){
+  if(typeof QRCode !== 'undefined' && typeof QRCode.toCanvas === 'function') return Promise.resolve(true);
+  return new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/qrcode@1.5.4/build/qrcode.min.js';
+    script.onload = () => resolve(typeof QRCode !== 'undefined' && typeof QRCode.toCanvas === 'function');
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
+async function gerarQRCode(){
   const canvas = document.getElementById('qrcode-canvas');
-  if(!canvas || !globalEventoId || typeof QRCode === 'undefined') { showToast('Não foi possível preparar o QRCode.'); return; }
+  if(!canvas || !globalEventoId){ showToast('Selecione um evento antes de gerar o QRCode.'); return; }
   const today = new Date();
   const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const url = `${window.location.origin}${window.location.pathname}?cadastro_publico=1&evento=${encodeURIComponent(globalEventoId)}&data=${encodeURIComponent(date)}`;
-  QRCode.toCanvas(canvas, url, { width: 280, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#0f172a', light: '#ffffff' } }, err => {
-    if(err){ showToast('Erro ao gerar QRCode.'); return; }
-    const label = document.getElementById('qrcode-url');
-    if(label) label.textContent = url;
-    showToast('QRCode gerado com sucesso.');
-  });
+  const label = document.getElementById('qrcode-url');
+  const loaded = await carregarBibliotecaQRCode();
+
+  if(loaded){
+    QRCode.toCanvas(canvas, url, { width: 280, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#0f172a', light: '#ffffff' } }, err => {
+      if(err){ showToast('Erro ao gerar QRCode.'); return; }
+      if(label) label.textContent = url;
+      showToast('QRCode gerado com sucesso.');
+    });
+    return;
+  }
+
+  // Fallback: mantém a funcionalidade mesmo quando um CDN bloqueia o carregamento do gerador local.
+  const fallbackUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=12&data=${encodeURIComponent(url)}`;
+  const image = document.createElement('img');
+  image.id = 'qrcode-canvas';
+  image.width = 280;
+  image.height = 280;
+  image.alt = 'QRCode para cadastro público';
+  image.className = 'mx-auto mt-4 bg-white p-3 rounded-lg';
+  image.src = fallbackUrl;
+  canvas.replaceWith(image);
+  if(label) label.textContent = url;
+  showToast('QRCode gerado com sucesso.');
 }
 
 function renderCurrentTab(){
