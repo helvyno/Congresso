@@ -33,7 +33,14 @@ app.post('/api/autenticar', async (req, res) => {
     `, [codevento]);
     const pessoa = rows.find(row => normalizeIdentity(row.usuario) === usuario);
     if (!pessoa) return res.status(401).json({ error: 'Usuário não encontrado ou sem acesso a este evento.' });
-    res.json({ pessoa, perfil: pessoa.perfil_descricao || '' });
+
+    // Registra o instante do último acesso da pessoa autenticada.
+    const loginResult = await pool.query(
+      'UPDATE pessoa SET dtlogin = CURRENT_TIMESTAMP WHERE codpessoa = $1 RETURNING *',
+      [pessoa.codpessoa]
+    );
+    const pessoaAtualizada = loginResult.rows[0] || pessoa;
+    res.json({ pessoa: { ...pessoaAtualizada, perfil_descricao: pessoa.perfil_descricao }, perfil: pessoa.perfil_descricao || '' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
