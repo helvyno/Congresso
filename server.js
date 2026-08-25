@@ -226,6 +226,28 @@ app.post('/api/escalas/automaticas', async (req, res) => {
   } finally { client.release(); }
 });
 
+// Aprovação transacional das sugestões selecionadas na tela de Parâmetros.
+app.post('/api/escalas/aprovar-sugestoes', async (req, res) => {
+  const codevento=Number(req.body?.codevento), escalas=Array.isArray(req.body?.escalas)?req.body.escalas:[];
+  if(!Number.isInteger(codevento)||codevento<=0||!escalas.length) return res.status(400).json({error:'Nenhuma sugestão válida foi enviada.'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN'); let inseridas=0;
+    for(const e of escalas){
+      const data=String(e.data||'').slice(0,10), per=Number(e.codperiodo), pessoa=Number(e.codpessoa), setor=Number(e.codsetor);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(data)||![per,pessoa,setor].every(Number.isInteger)) throw new Error('Sugestão contém dados inválidos.');
+      const exists=await client.query('SELECT 1 FROM escalas WHERE codevento=$1 AND data::date=$2::date AND codperiodo=$3 AND codsetor=$4',[codevento,data,per,setor]);
+      if(exists.rows.length) continue;
+      const valid=await client.query(`SELECT 1 FROM pessoa p JOIN perfil pf ON pf.codperfil=p.codperfil WHERE p.codpessoa=$1 AND p.codevento=$2 AND UPPER(pf.descricao)='INDICADOR'`,[pessoa,codevento]);
+      if(!valid.rows.length) throw new Error('A sugestão contém uma pessoa que não é Indicador do evento.');
+      const periodo=await client.query('SELECT horario_inicial,horario_final FROM periodo WHERE codperiodo=$1',[per]);
+      if(!periodo.rows.length) throw new Error('Período da sugestão não encontrado.');
+      await client.query('INSERT INTO escalas (codevento,data,codperiodo,codpessoa,codsetor,hora_inicio,hora_fim) VALUES ($1,$2,$3,$4,$5,$6,$7)',[codevento,data,per,pessoa,setor,periodo.rows[0].horario_inicial||null,periodo.rows[0].horario_final||null]); inseridas++;
+    }
+    await client.query('COMMIT'); res.json({inseridas});
+  }catch(err){await client.query('ROLLBACK');res.status(400).json({error:err.message});}finally{client.release();}
+});
+
 // Rotas genéricas para as demais tabelas do sistema
 const tables = [
   'evento', 'setor', 'congregacao', 'privilegio', 
