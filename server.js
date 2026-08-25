@@ -172,10 +172,11 @@ app.post('/api/escalas/automaticas', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const event = await client.query('SELECT data_inicio, data_final FROM evento WHERE codevento = $1', [codevento]);
+    const event = await client.query('SELECT data_inicio::date AS data_inicio, data_final::date AS data_final FROM evento WHERE codevento = $1', [codevento]);
     if (!event.rows.length) throw new Error('Evento não encontrado.');
     const ev = event.rows[0];
-    if (ev.data_inicio && data < String(ev.data_inicio).slice(0, 10) || ev.data_final && data > String(ev.data_final).slice(0, 10)) {
+    const dateCheck = await client.query('SELECT $1::date BETWEEN $2::date AND $3::date AS dentro_periodo', [data, ev.data_inicio, ev.data_final]);
+    if (!dateCheck.rows[0]?.dentro_periodo) {
       throw new Error('A data informada está fora do período do evento.');
     }
     const period = await client.query('SELECT horario_inicial, horario_final, descricao FROM periodo WHERE codperiodo = $1', [codperiodo]);
