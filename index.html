@@ -52,11 +52,6 @@
       </div>
     </div>
 
-    <div id="server-wake-banner" class="hidden fixed top-5 left-1/2 -translate-x-1/2 z-[110] bg-slate-950/90 border border-blue-400/40 text-white rounded-xl px-5 py-3 shadow-2xl text-sm font-medium flex items-center gap-3" role="status" aria-live="polite">
-      <span class="inline-block w-4 h-4 rounded-full border-2 border-blue-200 border-t-transparent animate-spin"></span>
-      <span id="server-wake-message">Acordando o servidor, aguarde...</span>
-    </div>
-
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center my-auto py-8">
       <div class="space-y-6 text-white max-w-xl">
         <h2 class="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
@@ -447,28 +442,8 @@ async function checkDbStatus(){
   }
 }
 
-function setServerWakeMessage(message, visible = true){
-  const banner = document.getElementById('server-wake-banner');
-  const text = document.getElementById('server-wake-message');
-  if(text) text.textContent = message;
-  if(banner) banner.classList.toggle('hidden', !visible);
-}
-async function warmUpServer(){
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
-  try {
-    const response = await fetch(`${API_BASE}/api/warmup`, { method:'GET', cache:'no-store', signal:controller.signal });
-    if(!response.ok) throw new Error('O servidor ainda não respondeu.');
-    return true;
-  } finally { clearTimeout(timer); }
-}
-
 async function loadDBForLogin(){
-  setServerWakeMessage('Acordando o servidor, aguarde...', true);
   try {
-    try { await warmUpServer(); }
-    catch(err) { console.warn('Aquecimento inicial não concluído:', err.message); }
-    setServerWakeMessage('Carregando eventos, aguarde...', true);
     const eventos = await apiList('evento');
     db['evento'] = eventos;
     const selectWelcome = document.getElementById('welcome-evento-select');
@@ -477,8 +452,6 @@ async function loadDBForLogin(){
     }
   } catch(err) {
     console.error("Erro ao carregar eventos para login:", err);
-  } finally {
-    setServerWakeMessage('', false);
   }
   checkDbStatus();
   onWelcomeEventoChange('');

@@ -25,7 +25,7 @@ app.post('/api/autenticar', async (req, res) => {
     const codevento = Number(req.body?.codevento);
     const usuario = normalizeIdentity(req.body?.usuario);
     if (!Number.isInteger(codevento) || codevento <= 0 || !usuario) return res.status(400).json({ error: 'Informe um evento e um usuário válidos.' });
-    const { rows } = await queryWithRetry(`
+    const { rows } = await pool.query(`
       SELECT p.*, pf.descricao AS perfil_descricao
       FROM pessoa p
       LEFT JOIN perfil pf ON pf.codperfil = p.codperfil
@@ -39,20 +39,10 @@ app.post('/api/autenticar', async (req, res) => {
   }
 });
 
-// Rota leve para acordar o Web Service e o compute do PostgreSQL antes do carregamento dos dados.
-app.get('/api/warmup', async (req, res) => {
-  try {
-    await queryWithRetry('SELECT 1 AS online');
-    res.json({ status: 'ok', warmed: true, timestamp: new Date().toISOString() });
-  } catch (err) {
-    res.status(503).json({ status: 'error', warmed: false, error: err.message });
-  }
-});
-
 // Health check endpoint
 app.get('/api/health/check', async (req, res) => {
   try {
-    await queryWithRetry('SELECT 1');
+    await pool.query('SELECT 1');
     res.json({ status: 'ok' });
   } catch (err) {
     res.status(500).json({ status: 'error', error: err.message });
@@ -62,7 +52,7 @@ app.get('/api/health/check', async (req, res) => {
 // Configuração do Mapa do Evento
 app.get('/api/configmapa', async (req, res) => {
   try {
-    const { rows } = await queryWithRetry('SELECT * FROM configmapa');
+    const { rows } = await pool.query('SELECT * FROM configmapa');
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -72,8 +62,8 @@ app.get('/api/configmapa', async (req, res) => {
 app.post('/api/configmapa/salvar', async (req, res) => {
   const { codevento, imagem_base64 } = req.body;
   try {
-    await queryWithRetry('DELETE FROM configmapa WHERE codevento = $1', [codevento]);
-    const { rows } = await queryWithRetry(
+    await pool.query('DELETE FROM configmapa WHERE codevento = $1', [codevento]);
+    const { rows } = await pool.query(
       'INSERT INTO configmapa (codevento, imagem_base64) VALUES ($1, $2) RETURNING *',
       [codevento, imagem_base64]
     );
@@ -90,7 +80,7 @@ app.get('/api/pessoadisponibilidade', async (req, res) => {
     const query = codevento
       ? { text: 'SELECT * FROM pessoadisponibilidade WHERE codevento = $1 ORDER BY codpessoa ASC, data ASC, codperiodo ASC', values: [codevento] }
       : { text: 'SELECT * FROM pessoadisponibilidade ORDER BY codpessoa ASC, data ASC, codperiodo ASC', values: [] };
-    const { rows } = await queryWithRetry(query);
+    const { rows } = await pool.query(query);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -125,7 +115,7 @@ app.post('/api/pessoadisponibilidade/salvar', async (req, res) => {
 // Rotas de Lista de Presença
 app.get('/api/listapresenca', async (req, res) => {
   try {
-    const { rows } = await queryWithRetry('SELECT * FROM listapresenca ORDER BY codpresenca ASC');
+    const { rows } = await pool.query('SELECT * FROM listapresenca ORDER BY codpresenca ASC');
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -135,7 +125,7 @@ app.get('/api/listapresenca', async (req, res) => {
 app.post('/api/listapresenca', async (req, res) => {
   const { codpessoa, codevento, data, presente } = req.body;
   try {
-    const { rows } = await queryWithRetry(
+    const { rows } = await pool.query(
       'INSERT INTO listapresenca (codpessoa, codevento, data, presente) VALUES ($1, $2, $3, $4) RETURNING *',
       [codpessoa, codevento, data, presente !== undefined ? presente : true]
     );
@@ -149,7 +139,7 @@ app.put('/api/listapresenca/:id', async (req, res) => {
   const id = req.params.id;
   const { codpessoa, codevento, data, presente } = req.body;
   try {
-    const { rows } = await queryWithRetry(
+    const { rows } = await pool.query(
       'UPDATE listapresenca SET codpessoa = $1, codevento = $2, data = $3, presente = $4 WHERE codpresenca = $5 RETURNING *',
       [codpessoa, codevento, data, presente, id]
     );
@@ -162,7 +152,7 @@ app.put('/api/listapresenca/:id', async (req, res) => {
 app.delete('/api/listapresenca/:id', async (req, res) => {
   const id = req.params.id;
   try {
-    await queryWithRetry('DELETE FROM listapresenca WHERE codpresenca = $1', [id]);
+    await pool.query('DELETE FROM listapresenca WHERE codpresenca = $1', [id]);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -254,7 +244,7 @@ tables.forEach(table => {
 
   app.get(`/api/${table}`, async (req, res) => {
     try {
-      const { rows } = await queryWithRetry(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
+      const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -267,14 +257,14 @@ tables.forEach(table => {
     if (table === 'pessoa') {
       data.usuario = String(data.usuario || '').trim().toUpperCase();
       if (!data.usuario) return res.status(400).json({ error: 'O usuário é obrigatório.' });
-      const duplicate = await queryWithRetry('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 LIMIT 1', [data.usuario]);
+      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 LIMIT 1', [data.usuario]);
       if (duplicate.rows.length) return res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
     }
     const keys = Object.keys(data);
     const values = Object.values(data);
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
     const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-      const { rows } = await queryWithRetry(query, values);
+      const { rows } = await pool.query(query, values);
       res.status(201).json(rows[0]);
     } catch (err) {
       if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
@@ -294,14 +284,14 @@ tables.forEach(table => {
     if (table === 'pessoa') {
       data.usuario = String(data.usuario || '').trim().toUpperCase();
       if (!data.usuario) return res.status(400).json({ error: 'O usuário é obrigatório.' });
-      const duplicate = await queryWithRetry('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 AND codpessoa <> $2 LIMIT 1', [data.usuario, id]);
+      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 AND codpessoa <> $2 LIMIT 1', [data.usuario, id]);
       if (duplicate.rows.length) return res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
     }
     const keys = Object.keys(data);
     const values = Object.values(data);
     const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
     const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${keys.length + 1} RETURNING *`;
-      const { rows } = await queryWithRetry(query, [...values, id]);
+      const { rows } = await pool.query(query, [...values, id]);
       res.json(rows[0]);
     } catch (err) {
       if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
@@ -317,7 +307,7 @@ tables.forEach(table => {
   app.delete(`/api/${table}/:id`, async (req, res) => {
     const id = req.params.id;
     try {
-      await queryWithRetry(`DELETE FROM ${table} WHERE ${pk} = $1`, [id]);
+      await pool.query(`DELETE FROM ${table} WHERE ${pk} = $1`, [id]);
       res.status(204).send();
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -330,7 +320,7 @@ tables.forEach(table => {
 // o registro mais recente quando a base já contém duplicidades históricas.
 app.get('/api/usuario', async (req, res) => {
   try {
-    const { rows } = await queryWithRetry(`
+    const { rows } = await pool.query(`
       SELECT DISTINCT ON (LOWER(TRIM(login))) *
       FROM usuario
       ORDER BY LOWER(TRIM(login)), codusuario DESC
@@ -351,14 +341,14 @@ app.post('/api/usuario', async (req, res) => {
   const values = Object.values(data);
   const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
   try {
-    const duplicate = await queryWithRetry(
+    const duplicate = await pool.query(
       'SELECT codusuario FROM usuario WHERE LOWER(TRIM(login)) = LOWER(TRIM($1)) LIMIT 1',
       [data.login]
     );
     if (duplicate.rows.length) {
       return res.status(409).json({ error: 'Este login já está cadastrado na tabela de usuários.' });
     }
-    const { rows } = await queryWithRetry(
+    const { rows } = await pool.query(
       `INSERT INTO usuario (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`,
       values
     );
@@ -378,14 +368,14 @@ app.put('/api/usuario/:id', async (req, res) => {
   const values = Object.values(data);
   const setString = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
   try {
-    const duplicate = await queryWithRetry(
+    const duplicate = await pool.query(
       'SELECT codusuario FROM usuario WHERE LOWER(TRIM(login)) = LOWER(TRIM($1)) AND codusuario <> $2 LIMIT 1',
       [data.login, id]
     );
     if (duplicate.rows.length) {
       return res.status(409).json({ error: 'Este login já está cadastrado na tabela de usuários.' });
     }
-    const { rows } = await queryWithRetry(
+    const { rows } = await pool.query(
       `UPDATE usuario SET ${setString} WHERE codusuario = $${keys.length + 1} RETURNING *`,
       [...values, id]
     );
@@ -397,7 +387,7 @@ app.put('/api/usuario/:id', async (req, res) => {
 
 app.delete('/api/usuario/:id', async (req, res) => {
   try {
-    await queryWithRetry('DELETE FROM usuario WHERE codusuario = $1', [req.params.id]);
+    await pool.query('DELETE FROM usuario WHERE codusuario = $1', [req.params.id]);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -522,7 +512,7 @@ app.get('/api/bi', async (req, res) => {
   try {
     const codevento = Number(req.query.codevento);
     if (!Number.isInteger(codevento) || codevento <= 0) return res.status(400).json({ error: 'Informe um evento válido para carregar os relatórios BI.' });
-    const { rows } = await queryWithRetry('SELECT id, codevento, nome, descricao, sql_consulta, ativo, criado_em, atualizado_em FROM relatorios_bi WHERE codevento = $1 ORDER BY nome ASC, id ASC', [codevento]);
+    const { rows } = await pool.query('SELECT id, codevento, nome, descricao, sql_consulta, ativo, criado_em, atualizado_em FROM relatorios_bi WHERE codevento = $1 ORDER BY nome ASC, id ASC', [codevento]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -536,7 +526,7 @@ app.post('/api/bi', async (req, res) => {
     const sql = validateBiSql(sql_consulta);
     if (!Number.isInteger(eventId) || eventId <= 0) return res.status(400).json({ error: 'Selecione um evento válido para o relatório.' });
     if (!String(nome || '').trim()) return res.status(400).json({ error: 'Informe o nome do relatório.' });
-    const { rows } = await queryWithRetry(
+    const { rows } = await pool.query(
       'INSERT INTO relatorios_bi (codevento, nome, descricao, sql_consulta, ativo) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [eventId, String(nome).trim(), descricao || null, sql, ativo !== false]
     );
@@ -553,7 +543,7 @@ app.put('/api/bi/:id', async (req, res) => {
     const sql = validateBiSql(sql_consulta);
     if (!Number.isInteger(eventId) || eventId <= 0) return res.status(400).json({ error: 'Selecione um evento válido para o relatório.' });
     if (!String(nome || '').trim()) return res.status(400).json({ error: 'Informe o nome do relatório.' });
-    const { rows } = await queryWithRetry(
+    const { rows } = await pool.query(
       'UPDATE relatorios_bi SET codevento = $1, nome = $2, descricao = $3, sql_consulta = $4, ativo = $5, atualizado_em = NOW() WHERE id = $6 RETURNING *',
       [eventId, String(nome).trim(), descricao || null, sql, ativo !== false, req.params.id]
     );
@@ -566,7 +556,7 @@ app.put('/api/bi/:id', async (req, res) => {
 
 app.delete('/api/bi/:id', async (req, res) => {
   try {
-    const result = await queryWithRetry('DELETE FROM relatorios_bi WHERE id = $1', [req.params.id]);
+    const result = await pool.query('DELETE FROM relatorios_bi WHERE id = $1', [req.params.id]);
     if (!result.rowCount) return res.status(404).json({ error: 'Relatório BI não encontrado.' });
     res.status(204).send();
   } catch (err) {
@@ -580,7 +570,7 @@ app.post('/api/bi/executar', async (req, res) => {
     const eventId = Number(codevento);
     if (!Number.isInteger(eventId) || eventId <= 0) return res.status(400).json({ error: 'Selecione um evento válido para executar a consulta.' });
     const sql = validateBiSql(sql_consulta);
-    const result = await queryWithRetry({ text: sql, values: [], rowMode: 'array' });
+    const result = await pool.query({ text: sql, values: [], rowMode: 'array' });
     res.json({ nome: String(nome || 'Consulta BI'), columns: result.fields.map(field => field.name), rows: result.rows });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -591,11 +581,11 @@ app.post('/api/bi/:id/executar', async (req, res) => {
   try {
     const eventId = Number(req.body && req.body.codevento);
     if (!Number.isInteger(eventId) || eventId <= 0) return res.status(400).json({ error: 'Selecione um evento válido para executar a consulta.' });
-    const report = await queryWithRetry('SELECT id, nome, sql_consulta, ativo FROM relatorios_bi WHERE id = $1 AND codevento = $2', [req.params.id, eventId]);
+    const report = await pool.query('SELECT id, nome, sql_consulta, ativo FROM relatorios_bi WHERE id = $1 AND codevento = $2', [req.params.id, eventId]);
     if (!report.rows.length) return res.status(404).json({ error: 'Relatório BI não encontrado.' });
     if (!report.rows[0].ativo) return res.status(400).json({ error: 'Este relatório está inativo.' });
     const sql = validateBiSql(report.rows[0].sql_consulta);
-    const result = await queryWithRetry({ text: sql, values: [], rowMode: 'array' });
+    const result = await pool.query({ text: sql, values: [], rowMode: 'array' });
     res.json({ nome: report.rows[0].nome, columns: result.fields.map(field => field.name), rows: result.rows });
   } catch (err) {
     res.status(400).json({ error: err.message });
