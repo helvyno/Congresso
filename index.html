@@ -364,6 +364,7 @@ let disponibilidadeSearch = '';
 let globalEventoId = null;
 let escalaSugestoes = [];
 let escalaSugestoesVisiveis = false;
+let escalaSugestoesSomentePresentes = false;
 
 // Normaliza textos somente para pesquisa: ignora acentos e diferenças entre maiúsculas/minúsculas.
 function normalizeSearchText(value){
@@ -375,15 +376,25 @@ let relatorioDataFilter = 'ALL';
 let relatorioPeriodoFilter = 'ALL';
 let modalState = { key:null, editingId:null };
 
+function dateOnly(value){
+  if (!value) return '';
+  if (value instanceof Date) return value.toISOString().split('T')[0];
+  return String(value).split('T')[0];
+}
+
 function formatDateBR(dateStr) {
   if (!dateStr) return '';
-  const parts = dateStr.split('T')[0].split('-');
+  const parts = dateOnly(dateStr).split('-');
   if (parts.length !== 3) return dateStr;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 function entity(key){ return ENTITIES.find(e=>e.key===key); }
-function findRecord(key,id){ return (db[key]||[]).find(r=>r[entity(key).pk]===id); }
+function findRecord(key,id){
+  if (id === null || id === undefined || id === '') return undefined;
+  const target = String(id);
+  return (db[key]||[]).find(r => r && r[entity(key).pk] !== null && r[entity(key).pk] !== undefined && String(r[entity(key).pk]) === target);
+}
 function refLabel(refKey,id){
   const ent = entity(refKey), rec = findRecord(refKey,id);
   return rec ? ent.display(rec) : `#${id}`;
@@ -580,7 +591,7 @@ function getCurrentIndicatorScales(){
   return (db.escalas || []).filter(es => Number(es.codevento) === Number(globalEventoId) && Number(es.codpessoa) === Number(currentUser.codpessoa));
 }
 function isIndicatorScaleAllowed(data, periodo, setor){
-  return getCurrentIndicatorScales().some(es => es.data && es.data.split('T')[0] === data && Number(es.codperiodo) === Number(periodo) && Number(es.codsetor) === Number(setor));
+  return getCurrentIndicatorScales().some(es => dateOnly(es.data) === dateOnly(data) && Number(es.codperiodo) === Number(periodo) && Number(es.codsetor) === Number(setor));
 }
 
 async function autenticarUsuarioSistema(){
@@ -601,7 +612,7 @@ async function autenticarUsuarioSistema(){
     accessProfile = data.perfil || '';
     isIndicatorAccess = isProfile(accessProfile, 'Indicador');
     isPublicView = isIndicatorAccess;
-    current = isIndicatorAccess ? 'designacoes' : 'home';
+    current = isIndicatorAccess ? 'presenca' : 'home';
     document.getElementById('welcome-screen')?.classList.add('hidden');
     await loadDB();
   }catch(err){
@@ -723,6 +734,7 @@ function buildLayout(){
     publicNav.classList.add('flex');
 
     const publicMenus = [
+      ...(isIndicatorAccess ? [{ key: 'presenca', label: 'Lista de Presença', icon: ICONS.presenca }] : []),
       { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
       { key: 'contagem', label: 'Contagem', icon: ICONS.contagem },
       { key: 'disponibilidade', label: 'Disponibilidade', icon: ICONS.disponibilidade },
@@ -1006,6 +1018,7 @@ function buildLayout(){
               <div><h4 class="text-sm font-bold text-slate-900 mb-1">Sugestão de Escalas</h4><p class="text-xs text-slate-500">Exibe as escalas cadastradas e sugere preenchimentos para os setores pendentes. O setor Mesa não participa de novas sugestões.</p></div>
               <div class="flex items-center gap-3 flex-wrap">
                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600"><input id="marcar-todas-sugestoes" type="checkbox" onchange="marcarTodasSugestoes(this.checked)" class="w-4 h-4 accent-blue-600"> Marcar Todos</label>
+                <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600" title="Considerar somente pessoas que confirmaram presença na Lista de Presença"><input id="sugestoes-somente-presentes" type="checkbox" onchange="alterarFiltroPresentes(this.checked)" class="w-4 h-4 accent-emerald-600"> Presentes</label>
                 <button type="button" onclick="gerarSugestoesEscalas()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Sugerir Escalas</button>
                 <button type="button" onclick="aprovarSugestoesEscalas()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Aprovar Sugestões</button>
               </div>
@@ -1109,7 +1122,7 @@ function buildLayout(){
     `;
   }).join('');
 
-  if (isPublicView && (current === 'home' || current === 'relatorios' || current === 'presenca')) current = 'designacoes';
+  if (isPublicView && (current === 'home' || current === 'relatorios')) current = 'presenca';
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca).forEach(e=>{ e._search=''; });
   
   const tabDes = document.getElementById('tab-designacoes');
@@ -1210,7 +1223,7 @@ function buildLayout(){
   updateHeaderEventoName();
 }
 async function showTab(key){
-  if(isPublicView && (key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
+  if(isPublicView && !isIndicatorAccess && (key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
   current = key;
   const mainContent = document.getElementById('main-content');
   const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'disponibilidade', 'pessoa', 'escalas', 'contagem'];
@@ -2344,7 +2357,14 @@ function dataEscalaISO(value){ return String(value || '').split('T')[0].slice(0,
 function pessoaNomeEscala(id){ return refRelationDescricao('pessoa', id) || 'Pessoa não identificada'; }
 function periodoDescricaoEscala(id){ return refRelationDescricao('periodo', id) || ''; }
 function setorDescricaoEscala(id){ return refRelationDescricao('setor', id) || ''; }
+function alterarFiltroPresentes(checked){
+  escalaSugestoesSomentePresentes=!!checked;
+  if(escalaSugestoesVisiveis) gerarSugestoesEscalas();
+}
+
 function gerarSugestoesEscalas(){
+  const filtroPresentes=document.getElementById('sugestoes-somente-presentes');
+  escalaSugestoesSomentePresentes=!!(filtroPresentes?.checked || escalaSugestoesSomentePresentes);
   if(!globalEventoId){ showToast('Selecione um evento antes de gerar sugestões.'); return; }
   const parametros=(db.parametros||[]).filter(p=>Number(p.codevento)===Number(globalEventoId) && (p.ativo===true || String(p.ativo).toLowerCase()==='true' || Number(p.ativo)===1));
   const slots=[...new Map(parametros.map(p=>[`${dataEscalaISO(p.datacont)}|${p.codperiodo}`,{data:dataEscalaISO(p.datacont),codperiodo:Number(p.codperiodo)}])).values()];
@@ -2367,7 +2387,13 @@ function gerarSugestoesEscalas(){
       if(existente){ return; }
       const candidatos=pessoas.filter(p=>{
         const info=disponibilidadePorPessoa.get(Number(p.codpessoa));
-        return info?.itens.some(d=>dataEscalaISO(d.data)===slot.data && (Number(d.codperiodo)===slot.codperiodo || String(periodoDescricaoEscala(d.codperiodo)).toUpperCase().includes('INTEGRAL')));
+        const disponivel=info?.itens.some(d=>dataEscalaISO(d.data)===slot.data && (Number(d.codperiodo)===slot.codperiodo || String(periodoDescricaoEscala(d.codperiodo)).toUpperCase().includes('INTEGRAL')));
+        if(!disponivel) return false;
+        if(escalaSugestoesSomentePresentes){
+          const confirmouPresenca=(db.listapresenca||[]).some(lp=>Number(lp.codevento)===Number(globalEventoId) && Number(lp.codpessoa)===Number(p.codpessoa) && dataEscalaISO(lp.data)===slot.data && (lp.presente===true || lp.presente==='true' || Number(lp.presente)===1));
+          if(!confirmouPresenca) return false;
+        }
+        return true;
       }).sort((a,b)=>{
         const ia=disponibilidadePorPessoa.get(Number(a.codpessoa))?.total||9999, ib=disponibilidadePorPessoa.get(Number(b.codpessoa))?.total||9999;
         return ia-ib || String(a.nomecompleto||'').localeCompare(String(b.nomecompleto||''));
@@ -2500,13 +2526,13 @@ function renderPresenca(){
     </tr>
   `;
 
-  let pessoas = (db['pessoa']||[]).filter(p => !evId || p.codevento == evId);
+  let pessoas = (db['pessoa']||[]).filter(p => (!evId || p.codevento == evId) && (!isIndicatorAccess || (currentUser && Number(p.codpessoa) === Number(currentUser.codpessoa))));
 
   // Se houver filtro de data ativo, retorna apenas as pessoas que possuem escala na data informada
   if (presencaDateFilter && presencaDateFilter !== 'ALL') {
     const codsPessoasComEscalaNoDia = new Set(
       (db['escalas'] || [])
-        .filter(es => Number(es.codevento) === Number(evId) && es.data && es.data.split('T')[0] === presencaDateFilter)
+        .filter(es => Number(es.codevento) === Number(evId) && es.data && dateOnly(es.data) === presencaDateFilter)
         .map(es => Number(es.codpessoa))
     );
     pessoas = pessoas.filter(p => codsPessoasComEscalaNoDia.has(Number(p.codpessoa)));
@@ -2928,7 +2954,7 @@ function renderTable(key){
     const q = ent._search;
     rows = rows.filter(r=>{
       return ent.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade').some(f=>{
-        let v = f.type==='fk' ? refLabel(f.ref, r[f.name]) : r[f.name];
+        let v = (f.type === 'fk' || f.type === 'search_fk') ? refLabel(f.ref, r[f.name]) : r[f.name];
         if(f.type==='date') v = formatDateBR(v);
         return normalizeSearchText(v||'').includes(q);
       }) || String(r[ent.pk]).includes(q);
@@ -3209,10 +3235,10 @@ function openEntityModal(key, id){
       if (key === 'contagem' && f.name === 'codperiodo') {
         const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
         if (dataContagemEl && dataContagemEl.value) {
-          const selData = dataContagemEl.value;
-          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+          const selData = dateOnly(dataContagemEl.value);
+          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && dateOnly(p.datacont) === selData && (p.ativo === true || p.ativo === 'true' || Number(p.ativo) === 1));
           const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
-          refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => es.data.split('T')[0] === selData && Number(es.codperiodo) === Number(per.codperiodo))));
+          refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => dateOnly(es.data) === selData && Number(es.codperiodo) === Number(per.codperiodo))));
         } else {
           refList = [];
         }
@@ -3221,11 +3247,11 @@ function openEntityModal(key, id){
       if (key === 'contagem' && f.name === 'codsetor' && isIndicatorAccess) {
         const dataEl = document.querySelector('#modal-form [data-field="data"]');
         const periodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
-        const dataSel = dataEl?.value; const periodoSel = Number(periodoEl?.value);
-        refList = refList.filter(setor => getCurrentIndicatorScales().some(es => es.data.split('T')[0] === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(setor.codsetor)));
+        const dataSel = dateOnly(dataEl?.value); const periodoSel = Number(periodoEl?.value);
+        refList = refList.filter(setor => getCurrentIndicatorScales().some(es => dateOnly(es.data) === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(setor.codsetor)));
       }
 
-      const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : (f.onContagemDataChange ? 'onchange="onContagemDataChange()"' : '');
+      const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : (f.onContagemDataChange ? 'onchange="onContagemDataChange()"' : (f.onContagemPeriodoChange ? 'onchange="onContagemPeriodoChange()"' : ''));
       const opts = refList.map(r=>{
         const rid = r[refEnt.pk];
         return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
@@ -3238,13 +3264,13 @@ function openEntityModal(key, id){
       }
     } else if(f.type==='date'){
       if(key === 'contagem' && f.name === 'data'){
-        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
+        const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true' || Number(p.ativo) === 1));
         const escalasIndicador = isIndicatorAccess ? getCurrentIndicatorScales() : [];
-        const datasParam = new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : '').filter(Boolean));
-        const datasEscala = new Set(escalasIndicador.map(e => e.data ? e.data.split('T')[0] : '').filter(Boolean));
+        const datasParam = new Set(paramsAtivos.map(p => p.datacont ? dateOnly(p.datacont) : '').filter(Boolean));
+        const datasEscala = new Set(escalasIndicador.map(e => e.data ? dateOnly(e.data) : '').filter(Boolean));
         const datasAtivas = [...datasParam].filter(d => !isIndicatorAccess || datasEscala.has(d)).sort();
         
-        let dateOpts = '<option value="">Selecione uma data liberada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
+        let dateOpts = '<option value="">Selecione uma data liberada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && dateOnly(val) === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
         control = `<select data-field="${f.name}" onchange="onContagemDataChange()" class="${base}">${dateOpts}</select>`;
       } else {
         let minAttr = '';
@@ -3256,8 +3282,8 @@ function openEntityModal(key, id){
         if (key === 'contagem' && f.name === 'codsetor' && isIndicatorAccess) {
         const dataEl = document.querySelector('#modal-form [data-field="data"]');
         const periodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
-        const dataSel = dataEl?.value; const periodoSel = Number(periodoEl?.value);
-        refList = refList.filter(setor => getCurrentIndicatorScales().some(es => es.data.split('T')[0] === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(setor.codsetor)));
+        const dataSel = dateOnly(dataEl?.value); const periodoSel = Number(periodoEl?.value);
+        refList = refList.filter(setor => getCurrentIndicatorScales().some(es => dateOnly(es.data) === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(setor.codsetor)));
       }
 
       const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
@@ -3318,6 +3344,9 @@ function openEntityModal(key, id){
 
   openModal('modal-form');
   checkMasterDisponibilidade();
+  if (key === 'contagem') {
+    onContagemDataChange();
+  }
 
   document.addEventListener('click', function(e) {
     ['codpessoa'].forEach(fieldName => {
@@ -3412,18 +3441,39 @@ function onContagemDataChange(){
   const periodoSelect = document.querySelector('#modal-form [data-field="codperiodo"]');
   if(!dataContagemEl || !periodoSelect) return;
 
-  const selData = dataContagemEl.value;
+  const selData = dateOnly(dataContagemEl.value);
   const evId = globalEventoId;
-  const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
+  const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && dateOnly(p.datacont) === selData && (p.ativo === true || p.ativo === 'true' || Number(p.ativo) === 1));
   const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
 
-  let refList = (db['periodo'] || []).filter(per => periodosAtivosIds.has(String(per.codperiodo)));
+  let refList = (db['periodo'] || []).filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => dateOnly(es.data) === selData && Number(es.codperiodo) === Number(per.codperiodo))));
   const currentPeriodoVal = periodoSelect.value;
   const opts = refList.map(r=>{
     const rid = r['codperiodo'];
     return `<option value="${rid}" ${currentPeriodoVal == rid ? 'selected':''}>${escapeHtml(r.descricao)} (#${rid})</option>`;
   }).join('');
   periodoSelect.innerHTML = '<option value="">Selecione um período liberado…</option>' + opts;
+  if (isIndicatorAccess && currentPeriodoVal && !refList.some(r => String(r.codperiodo) === String(currentPeriodoVal))) {
+    periodoSelect.value = '';
+  }
+  onContagemPeriodoChange();
+}
+
+function onContagemPeriodoChange(){
+  if (modalState.key !== 'contagem') return;
+  const setorSelect = document.querySelector('#modal-form [data-field="codsetor"]');
+  const dataEl = document.querySelector('#modal-form [data-field="data"]');
+  const periodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+  if (!setorSelect || !dataEl || !periodoEl) return;
+  const dataSel = dateOnly(dataEl.value);
+  const periodoSel = periodoEl.value ? Number(periodoEl.value) : null;
+  let setores = (db.setor || []).filter(s => !globalEventoId || Number(s.codevento) === Number(globalEventoId));
+  if (isIndicatorAccess) {
+    setores = setores.filter(s => getCurrentIndicatorScales().some(es => dateOnly(es.data) === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(s.codsetor)));
+  }
+  const currentSetorVal = setorSelect.value;
+  setorSelect.innerHTML = '<option value="">Selecione…</option>' + setores.map(s => `<option value="${s.codsetor}" ${String(currentSetorVal) === String(s.codsetor) ? 'selected' : ''}>${escapeHtml(s.descricao)} (#${s.codsetor})</option>`).join('');
+  if (isIndicatorAccess && currentSetorVal && !setores.some(s => String(s.codsetor) === String(currentSetorVal))) setorSelect.value = '';
 }
 
 function toggleAllDisponibilidade(masterCheckbox){
