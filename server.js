@@ -168,16 +168,24 @@ tables.forEach(table => {
   });
 
   app.post(`/api/${table}`, async (req, res) => {
-    const data = req.body;
+    try {
+      const data = { ...req.body };
+    if (table === 'pessoa') {
+      data.usuario = String(data.usuario || '').trim().toUpperCase();
+      if (!data.usuario) return res.status(400).json({ error: 'O usuário é obrigatório.' });
+      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 LIMIT 1', [data.usuario]);
+      if (duplicate.rows.length) return res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
+    }
     const keys = Object.keys(data);
     const values = Object.values(data);
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
     const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-    try {
       const { rows } = await pool.query(query, values);
       res.status(201).json(rows[0]);
     } catch (err) {
-      if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
+      if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
+        res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
+      } else if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
         res.status(400).json({ error: 'Já existe uma contagem registrada para este setor nesta data e período.' });
       } else {
         res.status(500).json({ error: err.message });
@@ -186,17 +194,25 @@ tables.forEach(table => {
   });
 
   app.put(`/api/${table}/:id`, async (req, res) => {
-    const id = req.params.id;
-    const data = req.body;
+    try {
+      const id = req.params.id;
+      const data = { ...req.body };
+    if (table === 'pessoa') {
+      data.usuario = String(data.usuario || '').trim().toUpperCase();
+      if (!data.usuario) return res.status(400).json({ error: 'O usuário é obrigatório.' });
+      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 AND codpessoa <> $2 LIMIT 1', [data.usuario, id]);
+      if (duplicate.rows.length) return res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
+    }
     const keys = Object.keys(data);
     const values = Object.values(data);
     const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
     const query = `UPDATE ${table} SET ${setString} WHERE ${pk} = $${keys.length + 1} RETURNING *`;
-    try {
       const { rows } = await pool.query(query, [...values, id]);
       res.json(rows[0]);
     } catch (err) {
-      if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
+      if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
+        res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
+      } else if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
         res.status(400).json({ error: 'Já existe uma contagem registrada para este setor nesta data e período.' });
       } else {
         res.status(500).json({ error: err.message });
@@ -299,7 +315,7 @@ const EVENT_REPLICATION_DEFINITIONS = {
   setor: { pk: 'codsetor', columns: ['descricao', 'numass', 'codevento'], dependencies: [] },
   congregacao: { pk: 'codcong', columns: ['nome_congregacao', 'codevento'], dependencies: [] },
   parametros: { pk: 'codparametro', columns: ['codevento', 'datacont', 'horacont', 'codperiodo', 'ativo'], dependencies: [] },
-  pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'codprivilegio', 'codperfil', 'codevento', 'codcong'], dependencies: ['congregacao'] },
+  pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'usuario', 'codprivilegio', 'codperfil', 'codevento', 'codcong'], dependencies: ['congregacao'] },
   escalas: { pk: 'codescala', columns: ['codevento', 'data', 'codperiodo', 'codpessoa', 'codsetor', 'hora_inicio', 'hora_fim'], dependencies: ['pessoa', 'setor'] },
   contagem: { pk: 'codcont', columns: ['codevento', 'data', 'codperiodo', 'codsetor', 'codpessoa', 'quantidade'], dependencies: ['pessoa', 'setor'] },
   listapresenca: { pk: 'codpresenca', columns: ['codpessoa', 'codevento', 'data', 'presente'], dependencies: ['pessoa'] },

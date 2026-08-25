@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   body { font-family: 'Inter', sans-serif; overflow: hidden; }
@@ -263,13 +264,15 @@ const ICONS = {
   mapa: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>',
   presenca: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
   disponibilidade: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zm3 10l2 2 4-4"></path>',
-  bi: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8"></path>'
+  bi: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8"></path>',
+  qrcode: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 2h2m2-2h2v2m-4 2h2m2 0h2"></path>'
 };
 
 const AVAILABLE_MENUS = [
   { key: 'Dashboard', label: 'Dashboard' },
   { key: 'Relatórios', label: 'Relatórios' },
   { key: 'BI', label: 'BI' },
+  { key: 'QRCode', label: 'QRCode' },
   { key: 'Designações', label: 'Designações' },
   { key: 'Mapa do Evento', label: 'Mapa do Evento' },
   { key: 'Lista de Presença', label: 'Lista de Presença' },
@@ -289,6 +292,7 @@ const ENTITIES = [
   { key:'home', label:'Início', plural:'Dashboard', isHome:true },
   { key:'relatorios', label:'Relatório', plural:'Relatórios', isReport:true },
   { key:'bi', label:'BI', plural:'BI', isBI:true },
+  { key:'qrcode', label:'QRCode', plural:'QRCode', isCustomQRCode:true },
   { key:'designacoes', label:'Designação', plural:'Designações', isCustom:true },
   { key:'mapa', label:'Mapa', plural:'Mapa do Evento', isCustomMap:true },
   { key:'presenca', label:'Presença', plural:'Lista de Presença', isCustomPresenca:true },
@@ -330,6 +334,7 @@ const ENTITIES = [
   { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', isCustomPessoa:true, display:r=>r.nomecompleto, fields:[
     {name:'nomecompleto', label:'Nome completo', type:'text', required:true, placeholder:'Nome e sobrenome'},
     {name:'telefone', label:'Telefone (11 números, ex: 34988887777)', type:'phone', required:true, placeholder:'34988887777'},
+    {name:'usuario', label:'Usuário', type:'usuario', required:true, placeholder:'Será sugerido automaticamente'},
     {name:'codprivilegio', label:'Privilégio', type:'fk', ref:'privilegio', required:true},
     {name:'codperfil', label:'Perfil', type:'fk', ref:'perfil', required:true, defaultToIndicador:true},
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
@@ -481,7 +486,7 @@ function onWelcomeEventoChange(val){
 }
 
 async function loadDB(){
-  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -506,7 +511,7 @@ async function loadDB(){
 
 async function atualizarBancoDashboard() {
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     let hasError = false;
 
@@ -788,6 +793,10 @@ function buildLayout(){
     if(e.isCustomDisponibilidade){
       return `<div id="tab-disponibilidade" class="tab-content overflow-y-auto ${current==='disponibilidade'?'active':''}"></div>`;
     }
+    if(e.isCustomQRCode){
+      return `<div id="tab-qrcode" class="tab-content overflow-y-auto ${current==='qrcode'?'active':''}"></div>`;
+    }
+      if(e.isCustomQRCode){ return; }
     if(e.isBI){
       if(isPublicView) return '';
       return `<div id="tab-bi" class="tab-content overflow-y-auto ${current==='bi'?'active':''}"></div>`;
@@ -1223,7 +1232,7 @@ async function showTab(key){
   const toggleBtn = document.getElementById('sidebar-toggle-btn');
   if(toggleBtn && !isPublicView) toggleBtn.classList.remove('hidden');
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -1252,6 +1261,30 @@ async function showTab(key){
   updateCounts();
 }
 
+function renderQRCode(){
+  const tab = document.getElementById('tab-qrcode');
+  if(!tab) return;
+  const today = new Date();
+  const isoDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const displayDate = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+  const eventLabel = ((db.evento||[]).find(e => Number(e.codevento) === Number(globalEventoId)) || {}).descricao || 'Evento atual';
+  tab.innerHTML = `<div class="max-w-2xl mx-auto w-full space-y-5"><div><p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Acesso público</p><h2 class="text-2xl font-bold text-slate-900">QRCode</h2><p class="text-sm text-slate-500 mt-1">Gere o acesso rápido ao cadastro público de pessoa para o evento selecionado.</p></div><section class="bg-white rounded-xl border border-slate-200 shadow-sm p-6"><div class="grid gap-4 sm:grid-cols-2 items-end"><div><label class="block text-xs font-medium text-slate-600 mb-1.5">Data</label><input value="${displayDate}" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700"></div><button onclick="gerarQRCode()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg shadow-sm">Gerar QRCode</button></div><div class="mt-5 rounded-xl bg-slate-50 border border-dashed border-slate-300 p-6 text-center"><p class="text-sm font-semibold text-slate-800">${escapeHtml(eventLabel)}</p><canvas id="qrcode-canvas" class="mx-auto mt-4 bg-white p-3 rounded-lg"></canvas><p id="qrcode-url" class="text-[11px] text-slate-500 break-all mt-4">Clique em Gerar QRCode para criar o acesso.</p></div></section></div>`;
+}
+
+function gerarQRCode(){
+  const canvas = document.getElementById('qrcode-canvas');
+  if(!canvas || !globalEventoId || typeof QRCode === 'undefined') { showToast('Não foi possível preparar o QRCode.'); return; }
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const url = `${window.location.origin}${window.location.pathname}?cadastro_publico=1&evento=${encodeURIComponent(globalEventoId)}&data=${encodeURIComponent(date)}`;
+  QRCode.toCanvas(canvas, url, { width: 280, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#0f172a', light: '#ffffff' } }, err => {
+    if(err){ showToast('Erro ao gerar QRCode.'); return; }
+    const label = document.getElementById('qrcode-url');
+    if(label) label.textContent = url;
+    showToast('QRCode gerado com sucesso.');
+  });
+}
+
 function renderCurrentTab(){
   if(current === 'home'){
     renderDashboard();
@@ -1267,6 +1300,8 @@ function renderCurrentTab(){
       renderDisponibilidade();
     } else if(current === 'bi'){
       renderBI();
+    } else if(current === 'qrcode'){
+      renderQRCode();
     } else {
     renderTable(current);
   }
@@ -2889,6 +2924,37 @@ function renderTable(key){
   }).join('');
 }
 
+let isPublicCadastro = false;
+
+async function iniciarCadastroPublico(){
+  const params = new URLSearchParams(window.location.search);
+  const eventoParam = Number(params.get('evento'));
+  if(params.get('cadastro_publico') !== '1' || !Number.isInteger(eventoParam) || eventoParam <= 0) return false;
+  isPublicCadastro = true; isPublicView = true; globalEventoId = eventoParam;
+  document.getElementById('welcome-screen')?.classList.add('hidden');
+  document.getElementById('main-header')?.classList.add('hidden');
+  document.getElementById('sidebar-nav')?.classList.add('hidden');
+  document.getElementById('main-content')?.classList.add('hidden');
+  try {
+    const keys = ['evento','privilegio','perfil','congregacao','periodo','pessoa'];
+    const results = await Promise.all(keys.map(apiList));
+    keys.forEach((key, i) => db[key] = results[i]);
+    const evento = (db.evento||[]).find(e => Number(e.codevento) === eventoParam);
+    if(!evento) throw new Error('Evento não encontrado.');
+    document.getElementById('modal-title').textContent = 'Novo Pessoa';
+    document.getElementById('modal-sub').textContent = 'Preencha os campos de pessoas.';
+    openEntityModal('pessoa');
+    const modal = document.getElementById('modal-form');
+    modal.classList.remove('inset-0','bg-black/40','backdrop-blur-sm');
+    modal.classList.add('overflow-y-auto','bg-slate-100','items-start','pt-6','md:pt-10');
+    modal.querySelector(':scope > div')?.classList.add('max-w-lg');
+    return true;
+  } catch(err){
+    document.body.innerHTML = `<div class="min-h-screen flex items-center justify-center p-6 bg-slate-100"><div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 text-center"><h1 class="font-bold text-slate-900">Link indisponível</h1><p class="text-sm text-red-600 mt-2">${escapeHtml(err.message)}</p></div></div>`;
+    return true;
+  }
+}
+
 function openEntityModal(key, id){
   if(isPublicView && key === 'contagem' && id !== undefined) return;
   const ent = entity(key);
@@ -3079,7 +3145,7 @@ function openEntityModal(key, id){
         return `<option value="${rid}" ${val == rid ? 'selected':''}>${escapeHtml(refEnt.display(r))} (#${rid})</option>`;
       }).join('');
       
-      if(f.fixedToGlobal && !ent.isGlobal){
+      if((f.fixedToGlobal || (isPublicCadastro && f.name === 'codperfil')) && !ent.isGlobal){
         control = `<select data-field="${f.name}" ${onChangeAttr} class="${base} bg-slate-100" ${!record ? 'disabled':''}><option value="">Selecione…</option>${opts}</select>${!record ? `<input type="hidden" data-field="${f.name}" value="${val}">` : ''}`;
       } else {
         control = `<select data-field="${f.name}" ${onChangeAttr} class="${base}"><option value="">Selecione…</option>${opts}</select>`;
@@ -3117,6 +3183,26 @@ function openEntityModal(key, id){
       <p class="err-msg hidden text-xs text-red-500 mt-1 font-mono"></p>
     </div>`;
   }).join('');
+
+  if(key === 'pessoa' && isPublicCadastro){
+    fieldsEl.querySelectorAll('[data-disp-item], [data-disp-day], #disp-select-all').forEach(input => input.checked = true);
+  }
+
+  if(key === 'pessoa'){
+    const nomeEl = fieldsEl.querySelector('[data-field="nomecompleto"]');
+    const telefoneEl = fieldsEl.querySelector('[data-field="telefone"]');
+    const usuarioEl = fieldsEl.querySelector('[data-field="usuario"]');
+    const atualizarSugestaoUsuario = () => {
+      if(!usuarioEl || usuarioEl.dataset.editado === 'true') return;
+      const nome = (nomeEl?.value || '').trim().split(/\s+/)[0].replace(/[^a-zA-ZÀ-ÿ]/g,'');
+      const telefone = (telefoneEl?.value || '').replace(/\D/g,'');
+      usuarioEl.value = nome ? `${nome}${telefone.slice(-4)}`.toUpperCase() : '';
+    };
+    nomeEl?.addEventListener('input', atualizarSugestaoUsuario);
+    telefoneEl?.addEventListener('input', atualizarSugestaoUsuario);
+    usuarioEl?.addEventListener('input', () => { usuarioEl.dataset.editado = 'true'; usuarioEl.value = usuarioEl.value.toUpperCase(); });
+    if(!record) atualizarSugestaoUsuario();
+  }
 
   if(key === 'evento' && !record){
     const sourceEvents = db['evento'] || [];
@@ -3403,6 +3489,18 @@ document.getElementById('entity-form').addEventListener('submit', async function
     }
   }
 
+  if (key === 'pessoa' && values.usuario) {
+    const usuarioDuplicado = (db['pessoa'] || []).some(p => String(p.usuario || '').trim().toUpperCase() === String(values.usuario).trim().toUpperCase() && (!editingId || Number(p.codpessoa) !== Number(editingId)));
+    if(usuarioDuplicado){
+      const wrap = form.querySelector('[data-field-wrap="usuario"]');
+      const input = wrap?.querySelector('[data-field="usuario"]');
+      const err = wrap?.querySelector('.err-msg');
+      input?.classList.add('field-error');
+      if(err){ err.textContent = 'Usuário já existe, informe um usuário diferente'; err.classList.remove('hidden'); }
+      showToast('Usuário já existe, informe um usuário diferente'); hasError = true;
+    }
+  }
+
   if (key === 'pessoa' && values.telefone) {
     const telefoneDuplicado = (db['pessoa'] || []).some(p => p.telefone === values.telefone && (!editingId || p.codpessoa !== Number(editingId)));
     if (telefoneDuplicado) {
@@ -3493,6 +3591,11 @@ document.getElementById('entity-form').addEventListener('submit', async function
       db['pessoadisponibilidade'] = dispRes;
     }
 
+    if(isPublicCadastro){
+      alert('Salvo com sucesso');
+      window.location.href = window.location.origin + window.location.pathname;
+      return;
+    }
     buildLayout();
     closeModal('modal-form');
   }catch(err){
@@ -3643,7 +3746,7 @@ function showToast(msg){
   toastTimer = setTimeout(()=>{ toast.classList.add('translate-y-20','opacity-0'); }, 4000);
 }
 
-loadDBForLogin();
+iniciarCadastroPublico().then(isPublic => { if(!isPublic) loadDBForLogin(); });
 </script>
 </body>
 </html>
