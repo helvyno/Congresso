@@ -15,6 +15,30 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+
+function normalizeIdentity(value) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
+app.post('/api/autenticar', async (req, res) => {
+  try {
+    const codevento = Number(req.body?.codevento);
+    const usuario = normalizeIdentity(req.body?.usuario);
+    if (!Number.isInteger(codevento) || codevento <= 0 || !usuario) return res.status(400).json({ error: 'Informe um evento e um usuário válidos.' });
+    const { rows } = await pool.query(`
+      SELECT p.*, pf.descricao AS perfil_descricao
+      FROM pessoa p
+      LEFT JOIN perfil pf ON pf.codperfil = p.codperfil
+      WHERE p.codevento = $1
+    `, [codevento]);
+    const pessoa = rows.find(row => normalizeIdentity(row.usuario) === usuario);
+    if (!pessoa) return res.status(401).json({ error: 'Usuário não encontrado ou sem acesso a este evento.' });
+    res.json({ pessoa, perfil: pessoa.perfil_descricao || '' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health/check', async (req, res) => {
   try {

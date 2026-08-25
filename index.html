@@ -75,24 +75,18 @@
             </select>
           </div>
 
-          <!-- BOTÃO ENTRAR COMO INDICADOR -->
-          <button id="btn-entrar-indicador" onclick="entrarComoIndicador()" disabled class="w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed">
-            <span>Entrar como Indicador</span>
-          </button>
-
-          <!-- BLOCO DE SENHA E ACESSO ADMINISTRADOR -->
-          <div class="pt-3 border-t border-white/10 space-y-3">
+          <!-- USUÁRIO DO SISTEMA -->
+          <div class="space-y-3">
             <div>
-              <label class="block text-xs text-slate-300 mb-1">Senha do Administrador do Evento:</label>
-              <input type="password" id="welcome-password" placeholder="Informe a senha apenas para administradores..." class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
+              <label class="block text-xs text-slate-300 mb-1">Usuário do Sistema:</label>
+              <input type="text" id="welcome-password" autocomplete="username" placeholder="Informe seu usuário" class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
               <p id="password-error-msg" class="hidden text-xs text-red-400 mt-1.5 font-medium flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
-                Senha incorreta para este evento!
+                Usuário não encontrado ou sem acesso a este evento!
               </p>
             </div>
-            <button id="btn-entrar-admin" onclick="entrarComoAdministrador()" disabled class="w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed">
-              <span>Entrar como Administrador</span>
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            <button id="btn-entrar-indicador" onclick="entrarComoIndicador()" disabled class="w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed">
+              <span>Entrar</span>
             </button>
           </div>
         </div>
@@ -164,6 +158,7 @@
           <button type="button" onclick="closeModal('modal-form')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Cancelar</button>
         </div>
       </form>
+      <div id="escala-sem-escala-panel" class="hidden mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"></div>
     </div>
   </div>
 
@@ -201,6 +196,9 @@
 const API_BASE = 'https://congresso-5p1a.onrender.com';
 let sidebarOpen = false;
 let isPublicView = true;
+let currentUser = null;
+let accessProfile = '';
+let isIndicatorAccess = false;
 let chartInstance1 = null;
 let chartInstanceRep1 = null;
 let chartInstanceRep2 = null;
@@ -461,27 +459,22 @@ async function loadDBForLogin(){
 
 function onWelcomeEventoChange(val){
   const btnIndicador = document.getElementById('btn-entrar-indicador');
-  const btnAdmin = document.getElementById('btn-entrar-admin');
   const passwordError = document.getElementById('password-error-msg');
   const passwordInput = document.getElementById('welcome-password');
   
   if(passwordError) passwordError.classList.add('hidden');
   if(passwordInput) passwordInput.classList.remove('field-error');
 
-  if(!btnIndicador || !btnAdmin) return;
+  if(!btnIndicador) return;
 
   if(val && val !== ""){
     btnIndicador.disabled = false;
     btnIndicador.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer";
-    
-    btnAdmin.disabled = false;
-    btnAdmin.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer";
   } else {
     btnIndicador.disabled = true;
     btnIndicador.className = "w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed";
     
-    btnAdmin.disabled = true;
-    btnAdmin.className = "w-full bg-slate-700 text-slate-400 font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-not-allowed";
+
   }
 }
 
@@ -567,73 +560,49 @@ function initGlobalEvento(){
   updateDashboardDateOptions();
 }
 
-async function entrarComoIndicador() {
-  const selectWelcome = document.getElementById('welcome-evento-select');
-  if(!selectWelcome || !selectWelcome.value){
-    showToast('Selecione um evento para prosseguir.');
-    return;
-  }
-  
-  globalEventoId = Number(selectWelcome.value);
-  isPublicView = true;
-  current = 'designacoes';
-  
-  const welcomeScreen = document.getElementById('welcome-screen');
-  if(welcomeScreen) welcomeScreen.classList.add('hidden');
-  
-  await loadDB();
+function normalizeIdentity(value){
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+function isProfile(name, expected){ return normalizeIdentity(name) === normalizeIdentity(expected); }
+function canEditBI(){ return !isProfile(accessProfile, 'Mesário'); }
+function getCurrentIndicatorScales(){
+  if(!currentUser) return [];
+  return (db.escalas || []).filter(es => Number(es.codevento) === Number(globalEventoId) && Number(es.codpessoa) === Number(currentUser.codpessoa));
+}
+function isIndicatorScaleAllowed(data, periodo, setor){
+  return getCurrentIndicatorScales().some(es => es.data && es.data.split('T')[0] === data && Number(es.codperiodo) === Number(periodo) && Number(es.codsetor) === Number(setor));
 }
 
-async function entrarComoAdministrador() {
+async function autenticarUsuarioSistema(){
   const selectWelcome = document.getElementById('welcome-evento-select');
-  const passwordInput = document.getElementById('welcome-password');
-  const passwordError = document.getElementById('password-error-msg');
-
-  if(passwordError) passwordError.classList.add('hidden');
-  if(passwordInput) passwordInput.classList.remove('field-error');
-  
-  if(!selectWelcome || !selectWelcome.value){
-    showToast('Selecione um evento para prosseguir.');
-    return;
-  }
-  
-  globalEventoId = Number(selectWelcome.value);
-  const senhaDigitada = passwordInput ? passwordInput.value.trim() : '';
-
-  try {
-    let eventos = db['evento'];
-    if(!eventos || eventos.length === 0) {
-      eventos = await apiList('evento');
-      db['evento'] = eventos;
-    }
-
-    const eventoObj = eventos.find(e => Number(e.codevento) === Number(globalEventoId));
-
-    if (!eventoObj) {
-      showToast('Evento não encontrado.');
-      return;
-    }
-
-    const senhaCadastrada = eventoObj.senha !== null && eventoObj.senha !== undefined ? String(eventoObj.senha).trim() : '';
-
-    if (senhaCadastrada !== '' && senhaCadastrada !== senhaDigitada) {
-      if(passwordError) passwordError.classList.remove('hidden');
-      if(passwordInput) passwordInput.classList.add('field-error');
-      showToast('Senha incorreta!');
-      return;
-    }
-
-    isPublicView = false;
-    current = 'home';
-    const welcomeScreen = document.getElementById('welcome-screen');
-    if(welcomeScreen) welcomeScreen.classList.add('hidden');
-    
+  const userInput = document.getElementById('welcome-password');
+  const error = document.getElementById('password-error-msg');
+  if(error) error.classList.add('hidden');
+  if(userInput) userInput.classList.remove('field-error');
+  if(!selectWelcome?.value){ showToast('Selecione um evento para prosseguir.'); return; }
+  const usuario = normalizeIdentity(userInput?.value || '');
+  if(!usuario){ if(userInput) userInput.classList.add('field-error'); showToast('Informe seu usuário.'); return; }
+  try{
+    const response = await fetch(`${API_BASE}/api/autenticar`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codevento:Number(selectWelcome.value), usuario})});
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error || 'Usuário não encontrado ou sem acesso a este evento.');
+    globalEventoId = Number(selectWelcome.value);
+    currentUser = data.pessoa;
+    accessProfile = data.perfil || '';
+    isIndicatorAccess = isProfile(accessProfile, 'Indicador');
+    isPublicView = isIndicatorAccess;
+    current = isIndicatorAccess ? 'designacoes' : 'home';
+    document.getElementById('welcome-screen')?.classList.add('hidden');
     await loadDB();
-  } catch(err) {
-    showToast('Erro ao validar senha: ' + err.message);
+  }catch(err){
+    if(error){ error.textContent=err.message; error.classList.remove('hidden'); }
+    if(userInput) userInput.classList.add('field-error');
+    showToast(err.message);
   }
 }
 
+async function entrarComoIndicador(){ return autenticarUsuarioSistema(); }
+async function entrarComoAdministrador(){ return autenticarUsuarioSistema(); }
 function voltarParaTelaInicial() {
   const welcomeScreen = document.getElementById('welcome-screen');
   const passwordInput = document.getElementById('welcome-password');
@@ -747,7 +716,8 @@ function buildLayout(){
       { key: 'designacoes', label: 'Escalas', icon: ICONS.escalas },
       { key: 'contagem', label: 'Contagem', icon: ICONS.contagem },
       { key: 'disponibilidade', label: 'Disponibilidade', icon: ICONS.disponibilidade },
-      { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa }
+      { key: 'mapa', label: 'Mapa do Evento', icon: ICONS.mapa },
+      { key: 'home', label: 'Dashboard', icon: ICONS.home }
     ];
 
     publicNav.innerHTML = publicMenus.map(m => `
@@ -1218,7 +1188,7 @@ function buildLayout(){
 }
 
 async function showTab(key){
-  if(isPublicView && (key === 'home' || key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
+  if(isPublicView && (key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
   current = key;
   const mainContent = document.getElementById('main-content');
   const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'disponibilidade', 'pessoa', 'escalas', 'contagem'];
@@ -2998,6 +2968,7 @@ function openEntityModal(key, id){
   const fieldsEl = document.getElementById('modal-fields');
   fieldsEl.innerHTML = ent.fields.map(f=>{
     let val = record ? record[f.name] : '';
+    if(!record && key === 'contagem' && isIndicatorAccess && f.name === 'codpessoa' && currentUser) val = currentUser.codpessoa;
     if(!record && !ent.isGlobal && f.fixedToGlobal && globalEventoId && f.name === 'codevento'){
       val = globalEventoId;
     }
@@ -3132,10 +3103,11 @@ function openEntityModal(key, id){
         if(found) initialDisplayVal = found.nomecompleto;
       }
 
+      const lockedPerson = key === 'contagem' && isIndicatorAccess && f.name === 'codpessoa';
       control = `
         <div class="relative">
           <input type="hidden" data-field="${f.name}" value="${val || ''}" id="search-fk-val-${f.name}">
-          <input type="text" id="search-fk-input-${f.name}" value="${escapeHtml(initialDisplayVal)}" placeholder="Digite para buscar pessoa..." autocomplete="off" oninput="onSearchFkInput('${f.name}', this.value)" onfocus="showSearchFkDropdown('${f.name}')" class="${base}">
+          <input type="text" id="search-fk-input-${f.name}" value="${escapeHtml(initialDisplayVal || (lockedPerson && currentUser ? currentUser.nomecompleto : ''))}" placeholder="Digite para buscar pessoa..." autocomplete="off" ${lockedPerson ? 'readonly' : `oninput="onSearchFkInput('${f.name}', this.value)" onfocus="showSearchFkDropdown('${f.name}')"`} class="${base} ${lockedPerson ? 'bg-slate-100 cursor-not-allowed' : ''}">
           <div id="search-fk-dropdown-${f.name}" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 hidden"></div>
         </div>
       `;
@@ -3162,10 +3134,17 @@ function openEntityModal(key, id){
           const selData = dataContagemEl.value;
           const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && p.datacont.split('T')[0] === selData && (p.ativo === true || p.ativo === 'true'));
           const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
-          refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)));
+          refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => es.data.split('T')[0] === selData && Number(es.codperiodo) === Number(per.codperiodo))));
         } else {
           refList = [];
         }
+      }
+
+      if (key === 'contagem' && f.name === 'codsetor' && isIndicatorAccess) {
+        const dataEl = document.querySelector('#modal-form [data-field="data"]');
+        const periodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+        const dataSel = dataEl?.value; const periodoSel = Number(periodoEl?.value);
+        refList = refList.filter(setor => getCurrentIndicatorScales().some(es => es.data.split('T')[0] === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(setor.codsetor)));
       }
 
       const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : (f.onContagemDataChange ? 'onchange="onContagemDataChange()"' : '');
@@ -3182,7 +3161,10 @@ function openEntityModal(key, id){
     } else if(f.type==='date'){
       if(key === 'contagem' && f.name === 'data'){
         const paramsAtivos = (db['parametros']||[]).filter(p => (!globalEventoId || p.codevento == globalEventoId) && (p.ativo === true || p.ativo === 'true'));
-        const datasAtivas = [...new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : ''))].filter(Boolean).sort();
+        const escalasIndicador = isIndicatorAccess ? getCurrentIndicatorScales() : [];
+        const datasParam = new Set(paramsAtivos.map(p => p.datacont ? p.datacont.split('T')[0] : '').filter(Boolean));
+        const datasEscala = new Set(escalasIndicador.map(e => e.data ? e.data.split('T')[0] : '').filter(Boolean));
+        const datasAtivas = [...datasParam].filter(d => !isIndicatorAccess || datasEscala.has(d)).sort();
         
         let dateOpts = '<option value="">Selecione uma data liberada nos parâmetros…</option>' + datasAtivas.map(d => `<option value="${d}" ${val && val.split('T')[0] === d ? 'selected' : ''}>${formatDateBR(d)}</option>`).join('');
         control = `<select data-field="${f.name}" onchange="onContagemDataChange()" class="${base}">${dateOpts}</select>`;
@@ -3193,7 +3175,14 @@ function openEntityModal(key, id){
           minAttr = `min="${ev.data_inicio.split('T')[0]}"`;
           maxAttr = `max="${ev.data_final.split('T')[0]}"`;
         }
-        const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
+        if (key === 'contagem' && f.name === 'codsetor' && isIndicatorAccess) {
+        const dataEl = document.querySelector('#modal-form [data-field="data"]');
+        const periodoEl = document.querySelector('#modal-form [data-field="codperiodo"]');
+        const dataSel = dataEl?.value; const periodoSel = Number(periodoEl?.value);
+        refList = refList.filter(setor => getCurrentIndicatorScales().some(es => es.data.split('T')[0] === dataSel && Number(es.codperiodo) === periodoSel && Number(es.codsetor) === Number(setor.codsetor)));
+      }
+
+      const onChangeAttr = f.onEscalaDataPeriodoChange ? 'onchange="onEscalaDataPeriodoChange()"' : '';
         control = `<input type="date" data-field="${f.name}" ${onChangeAttr} value="${val ? val.split('T')[0] : ''}" ${minAttr} ${maxAttr} class="${base}">`;
       }
     } else if(f.type==='time'){
@@ -3223,13 +3212,13 @@ function openEntityModal(key, id){
     const usuarioEl = fieldsEl.querySelector('[data-field="usuario"]');
     const atualizarSugestaoUsuario = () => {
       if(!usuarioEl || usuarioEl.dataset.editado === 'true') return;
-      const nome = (nomeEl?.value || '').trim().split(/\s+/)[0].replace(/[^a-zA-ZÀ-ÿ]/g,'');
+      const nome = normalizeIdentity((nomeEl?.value || '').trim().split(/\s+/)[0]);
       const telefone = (telefoneEl?.value || '').replace(/\D/g,'');
-      usuarioEl.value = nome ? `${nome}${telefone.slice(-4)}`.toUpperCase() : '';
+      usuarioEl.value = nome ? `${nome}${telefone.slice(-4)}` : '';
     };
     nomeEl?.addEventListener('input', atualizarSugestaoUsuario);
     telefoneEl?.addEventListener('input', atualizarSugestaoUsuario);
-    usuarioEl?.addEventListener('input', () => { usuarioEl.dataset.editado = 'true'; usuarioEl.value = usuarioEl.value.toUpperCase(); });
+    usuarioEl?.addEventListener('input', () => { usuarioEl.dataset.editado = 'true'; usuarioEl.value = normalizeIdentity(usuarioEl.value); });
     if(!record) atualizarSugestaoUsuario();
   }
 
@@ -3267,6 +3256,7 @@ function openEntityModal(key, id){
     if(initialPeriodoEl && initialPeriodoEl.value){
       onEscalaPeriodoChange(initialPeriodoEl.value);
     }
+    atualizarSetoresSemEscala();
   }
 }
 
@@ -3387,11 +3377,25 @@ function checkMasterDisponibilidade(){
   });
 }
 
+function atualizarSetoresSemEscala(){
+  const panel = document.getElementById('escala-sem-escala-panel');
+  if(!panel || modalState.key !== 'escalas') return;
+  const data = document.querySelector('#modal-form [data-field="data"]')?.value;
+  const periodo = Number(document.querySelector('#modal-form [data-field="codperiodo"]')?.value);
+  if(!data || !periodo || !globalEventoId){ panel.classList.add('hidden'); panel.innerHTML=''; return; }
+  const setores = (db.setor||[]).filter(s => Number(s.codevento) === Number(globalEventoId));
+  const ocupados = new Set((db.escalas||[]).filter(es => Number(es.codevento)===Number(globalEventoId) && es.data?.split('T')[0]===data && Number(es.codperiodo)===periodo && Number(es.codescala)!==Number(modalState.editingId)).map(es => Number(es.codsetor)));
+  const faltantes = setores.filter(s => !ocupados.has(Number(s.codsetor)));
+  panel.classList.remove('hidden');
+  panel.innerHTML = `<strong>Setores sem pessoa escalada</strong><div class="mt-1">${faltantes.length ? faltantes.map(s => escapeHtml(s.descricao)).join(', ') : 'Nenhum. Todos os setores possuem escala para a data e período informados.'}</div>`;
+}
+
 function onEscalaDataPeriodoChange(){
   const periodoEscalaEl = document.querySelector('#modal-form [data-field="codperiodo"]');
   if(periodoEscalaEl && periodoEscalaEl.value){
     onEscalaPeriodoChange(periodoEscalaEl.value);
   }
+  atualizarSetoresSemEscala();
 }
 
 function onEscalaPeriodoChange(codPeriodo){
@@ -3406,6 +3410,7 @@ function onEscalaPeriodoChange(codPeriodo){
     if(horaInicioInput) horaInicioInput.value = '';
     if(horaFimInput) horaFimInput.value = '';
   }
+  atualizarSetoresSemEscala();
 }
 
 document.getElementById('entity-form').addEventListener('submit', async function(ev){
@@ -3503,6 +3508,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
   });
 
   if (key === 'contagem') {
+    if(isIndicatorAccess && !isIndicatorScaleAllowed(values.data ? values.data.split('T')[0] : '', values.codperiodo, values.codsetor)){ showToast('Você só pode lançar contagem em data, período e setor nos quais está escalado.'); hasError = true; }
     const dataStr = values.data ? values.data.split('T')[0] : '';
     const codPeriodoVal = Number(values.codperiodo);
     const parametroEncontrado = (db['parametros'] || []).find(p => 
@@ -3684,9 +3690,9 @@ function renderBI(){
     </section>` : `
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between"><div><h3 class="font-bold text-slate-900">Relatórios cadastrados</h3><p class="text-xs text-slate-500 mt-1">Use o ícone de execução para consultar a base.</p></div><span class="text-xs text-slate-400">${reports.length} relatório(s)</span></div>
-      <div class="max-h-[62vh] overflow-auto"><table class="w-full min-w-[760px] text-sm"><thead class="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wider text-slate-500"><tr><th class="text-left px-5 py-3">Nome</th><th class="text-left px-5 py-3">Descrição</th><th class="text-left px-5 py-3">Status</th><th class="text-right px-5 py-3">Ações</th></tr></thead><tbody>${reports.length ? reports.map(bi => `<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-5 py-3 font-medium text-slate-800">${escapeHtml(bi.nome)}</td><td class="px-5 py-3 text-slate-500 max-w-xl truncate">${escapeHtml(bi.descricao || '—')}</td><td class="px-5 py-3"><span class="px-2 py-1 rounded-full text-xs ${bi.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${bi.ativo ? 'Ativo' : 'Inativo'}</span></td><td class="px-5 py-3"><div class="flex justify-end gap-1"><button title="Executar consulta" onclick="executeBI(${bi.id})" class="p-2 rounded-lg text-emerald-700 hover:bg-emerald-50">▶</button><button title="Editar" onclick="editBI(${bi.id})" class="p-2 rounded-lg text-blue-700 hover:bg-blue-50">✎</button><button title="Excluir" onclick="deleteBI(${bi.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50">✕</button></div></td></tr>`).join('') : '<tr><td colspan="4" class="px-5 py-14 text-center text-slate-400">Nenhum relatório cadastrado.</td></tr>'}</tbody></table></div>
+      <div class="max-h-[62vh] overflow-auto"><table class="w-full min-w-[760px] text-sm"><thead class="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wider text-slate-500"><tr><th class="text-left px-5 py-3">Nome</th><th class="text-left px-5 py-3">Descrição</th><th class="text-left px-5 py-3">Status</th><th class="text-right px-5 py-3">Ações</th></tr></thead><tbody>${reports.length ? reports.map(bi => `<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-5 py-3 font-medium text-slate-800">${escapeHtml(bi.nome)}</td><td class="px-5 py-3 text-slate-500 max-w-xl truncate">${escapeHtml(bi.descricao || '—')}</td><td class="px-5 py-3"><span class="px-2 py-1 rounded-full text-xs ${bi.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${bi.ativo ? 'Ativo' : 'Inativo'}</span></td><td class="px-5 py-3"><div class="flex justify-end gap-1"><button title="Executar consulta" onclick="executeBI(${bi.id})" class="p-2 rounded-lg text-emerald-700 hover:bg-emerald-50">▶</button>${canEditBI() ? `<button title="Editar" onclick="editBI(${bi.id})" class="p-2 rounded-lg text-blue-700 hover:bg-blue-50">✎</button>` : ''}${canEditBI() ? `<button title="Excluir" onclick="deleteBI(${bi.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50">✕</button>` : ''}</div></td></tr>`).join('') : '<tr><td colspan="4" class="px-5 py-14 text-center text-slate-400">Nenhum relatório cadastrado.</td></tr>'}</tbody></table></div>
     </section>`;
-  tab.innerHTML = `<div class="space-y-5 pb-8"><div class="flex-shrink-0"><div class="flex items-start justify-between gap-4 flex-wrap"><div><p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Business Intelligence</p><h2 class="text-2xl font-bold text-slate-900">Relatórios personalizados</h2><p class="text-sm text-slate-500 mt-1">Evento atual: <strong>${escapeHtml(currentEventLabel)}</strong> · Cadastre consultas SQL de leitura, execute-as e exporte os resultados.</p></div>${biEditorOpen ? '' : '<button onclick="openBINew()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm"><span class="text-lg leading-none">+</span> Novo relatório</button>'}</div></div>${editorHtml}<section id="bi-result-card" class="relative z-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"></section></div>`;
+  tab.innerHTML = `<div class="space-y-5 pb-8"><div class="flex-shrink-0"><div class="flex items-start justify-between gap-4 flex-wrap"><div><p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Business Intelligence</p><h2 class="text-2xl font-bold text-slate-900">Relatórios personalizados</h2><p class="text-sm text-slate-500 mt-1">Evento atual: <strong>${escapeHtml(currentEventLabel)}</strong> · Cadastre consultas SQL de leitura, execute-as e exporte os resultados.</p></div>${biEditorOpen || !canEditBI() ? '' : '<button onclick="openBINew()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm"><span class="text-lg leading-none">+</span> Novo relatório</button>'}</div></div>${editorHtml}<section id="bi-result-card" class="relative z-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"></section></div>`;
   if(biEditorOpen && biEditingId) loadBIForm(biEditingId); else if(biEditorOpen) updateBIRelationshipSuggestions();
 }
 
@@ -3755,8 +3761,8 @@ function insertBIJoin(source, sourceColumn, target, targetColumn){
   sqlEl.focus(); sqlEl.setSelectionRange(sqlEl.value.length, sqlEl.value.length);
   updateBIRelationshipSuggestions();
 }
-async function saveBIReport(event){ event.preventDefault(); if(!globalEventoId){ showToast('Selecione um evento antes de salvar.'); return; } const payload={codevento:globalEventoId,nome:document.getElementById('bi-name').value.trim(), descricao:document.getElementById('bi-description').value.trim(), sql_consulta:document.getElementById('bi-sql').value.trim(), ativo:document.getElementById('bi-active').checked}; try { const editing=biEditingId; const data=editing ? await apiUpdate('bi', editing, payload) : await apiCreate('bi', payload); if(!editing) db.bi=[...(db.bi||[]),data]; else db.bi=(db.bi||[]).map(r=>Number(r.id)===Number(editing)?data:r); biEditingId=null; biEditorOpen=false; biLastResult=null; showToast('Relatório BI salvo com sucesso.'); renderBI(); updateCounts(); } catch(err){ showToast('Erro ao salvar relatório: '+err.message); } }
-async function deleteBI(id){ if(!confirm('Excluir este relatório BI?')) return; try { await apiDelete('bi', id); db.bi=(db.bi||[]).filter(r=>Number(r.id)!==Number(id)); showToast('Relatório excluído.'); renderBI(); } catch(err){ showToast('Erro ao excluir relatório: '+err.message); } }
+async function saveBIReport(event){ event.preventDefault(); if(!canEditBI()){ showToast('Seu perfil pode apenas executar relatórios BI.'); return; } if(!globalEventoId){ showToast('Selecione um evento antes de salvar.'); return; } const payload={codevento:globalEventoId,nome:document.getElementById('bi-name').value.trim(), descricao:document.getElementById('bi-description').value.trim(), sql_consulta:document.getElementById('bi-sql').value.trim(), ativo:document.getElementById('bi-active').checked}; try { const editing=biEditingId; const data=editing ? await apiUpdate('bi', editing, payload) : await apiCreate('bi', payload); if(!editing) db.bi=[...(db.bi||[]),data]; else db.bi=(db.bi||[]).map(r=>Number(r.id)===Number(editing)?data:r); biEditingId=null; biEditorOpen=false; biLastResult=null; showToast('Relatório BI salvo com sucesso.'); renderBI(); updateCounts(); } catch(err){ showToast('Erro ao salvar relatório: '+err.message); } }
+async function deleteBI(id){ if(!canEditBI()) return; if(!confirm('Excluir este relatório BI?')) return; try { await apiDelete('bi', id); db.bi=(db.bi||[]).filter(r=>Number(r.id)!==Number(id)); showToast('Relatório excluído.'); renderBI(); } catch(err){ showToast('Erro ao excluir relatório: '+err.message); } }
 async function executeBI(id){ const resultCard=document.getElementById('bi-result-card'); if(!globalEventoId){ if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-red-600">Selecione um evento antes de executar.</div>'; return; } if(resultCard) resultCard.innerHTML='<div class="p-6 text-sm text-slate-500">Executando consulta…</div>'; try { const r=await fetch(`${API_BASE}/api/bi/${id}/executar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codevento:globalEventoId})}); const data=await r.json(); if(!r.ok) throw new Error(data.error||'Falha ao executar consulta.'); biLastResult=data; renderBIResult(data); if(resultCard) scrollBIResultIntoView(resultCard); } catch(err){ if(resultCard){ resultCard.innerHTML=`<div class="p-6 text-sm text-red-600">${escapeHtml(err.message)}</div>`; scrollBIResultIntoView(resultCard); } } }
 function scrollBIResultIntoView(resultCard){ const tab=document.getElementById('tab-bi'); if(!resultCard || !tab) return; const top=Math.max(0, resultCard.offsetTop - 12); tab.scrollTo({top, left:0, behavior:'smooth'}); }
 function renderBIResult(data){ const card=document.getElementById('bi-result-card'); if(!card) return; const cols=data.columns||[], rows=data.rows||[]; card.innerHTML=`<div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-bold text-slate-900">Resultado: ${escapeHtml(data.nome)}</h3><p class="text-xs text-slate-500 mt-1">${rows.length} registro(s) · ${cols.length} coluna(s)</p></div><div class="flex gap-2 items-center"><button onclick="exportBIExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar Excel</button><button onclick="exportBIPdf()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-2 rounded-lg">Exportar PDF</button><button onclick="closeBIResult()" title="Fechar resultado" aria-label="Fechar resultado" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3 py-2 rounded-lg flex items-center gap-1.5"><span class="text-base leading-none">×</span> Fechar</button></div></div><div class="max-h-[70vh] overflow-auto"><table class="min-w-max w-full text-xs border-collapse"><thead class="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr>${cols.map(c=>`<th class="text-left px-4 py-3 border-b border-slate-200 whitespace-nowrap min-w-[140px]">${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr class="border-b border-slate-100 hover:bg-slate-50">${cols.map((_,index)=>`<td class="px-4 py-2.5 whitespace-nowrap text-slate-700 min-w-[140px]">${escapeHtml(row[index] === null || row[index] === undefined ? 'NULL' : row[index])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${Math.max(cols.length,1)}" class="px-4 py-10 text-center text-slate-400">A consulta não retornou registros.</td></tr>`}</tbody></table></div>`; }
