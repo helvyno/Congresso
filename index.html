@@ -188,6 +188,27 @@
     </div>
   </div>
 
+  <div id="designacoes-notification" class="fixed inset-0 z-[90] hidden items-center justify-center bg-slate-950/55 p-4 sm:p-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="designacoes-notification-title">
+    <div class="w-full max-w-xl max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-7">
+      <div class="flex items-start gap-3">
+        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700" aria-hidden="true">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 id="designacoes-notification-title" class="text-lg font-bold leading-6 text-slate-900 sm:text-xl">Aviso de designações</h2>
+          <div id="designacoes-notification-message" class="mt-4 whitespace-pre-line text-sm leading-6 text-slate-700"></div>
+        </div>
+      </div>
+      <div class="mt-7 flex flex-col-reverse gap-4 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 sm:text-sm">
+          <input id="designacoes-notification-suppress" type="checkbox" class="h-4 w-4 rounded accent-blue-600">
+          <span>Não exibir Novamente</span>
+        </label>
+        <button type="button" onclick="confirmarNotificacaoDesignacoes()" class="w-full rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto">OK</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white border border-slate-800 px-5 py-3 rounded-lg shadow-2xl translate-y-20 opacity-0 transition-all duration-300 z-50 max-w-sm">
     <span id="toast-msg" class="text-sm">Operação realizada com sucesso!</span>
   </div>
@@ -615,11 +636,70 @@ async function autenticarUsuarioSistema(){
     current = isIndicatorAccess ? 'designacoes' : 'home';
     document.getElementById('welcome-screen')?.classList.add('hidden');
     await loadDB();
+    abrirNotificacaoDesignacoes();
   }catch(err){
     if(error){ error.textContent=err.message; error.classList.remove('hidden'); }
     if(userInput) userInput.classList.add('field-error');
     showToast(err.message);
   }
+}
+
+const DESIGNACOES_NOTIFICATION_STORAGE_PREFIX = 'indicadores-web:notificacao-designacoes:v1';
+
+function chaveNotificacaoDesignacoes(){
+  const pessoaId = currentUser?.codpessoa ?? currentUser?.id ?? normalizeIdentity(currentUser?.usuario || 'usuario');
+  return `${DESIGNACOES_NOTIFICATION_STORAGE_PREFIX}:${Number(globalEventoId) || 'evento'}:${pessoaId}`;
+}
+
+function notificacaoDesignacoesJaDesativada(){
+  try { return localStorage.getItem(chaveNotificacaoDesignacoes()) === '1'; }
+  catch(err){ console.warn('Não foi possível ler a preferência da notificação:', err); return false; }
+}
+
+function abrirNotificacaoDesignacoes(){
+  const modal = document.getElementById('designacoes-notification');
+  const message = document.getElementById('designacoes-notification-message');
+  const suppress = document.getElementById('designacoes-notification-suppress');
+  if(!modal || !message || !currentUser || notificacaoDesignacoesJaDesativada()) return false;
+
+  const nome = String(currentUser.nomecompleto || '').trim() || 'usuário';
+  const designacoes = (db.escalas || [])
+    .filter(es => Number(es.codevento) === Number(globalEventoId) && Number(es.codpessoa) === Number(currentUser.codpessoa))
+    .sort((a, b) => {
+      const dataCompare = dateOnly(a.data).localeCompare(dateOnly(b.data));
+      if(dataCompare !== 0) return dataCompare;
+      const setorA = normalizeSearchText(setorDescricaoEscala(a.codsetor));
+      const setorB = normalizeSearchText(setorDescricaoEscala(b.codsetor));
+      return setorA.localeCompare(setorB);
+    });
+
+  if(designacoes.length){
+    const linhas = designacoes.map(es => {
+      const data = escapeHtml(formatDateBR(es.data));
+      const setor = escapeHtml(setorDescricaoEscala(es.codsetor));
+      return `<div class="mt-1"><strong>${data}</strong> - <strong>${setor}</strong></div>`;
+    }).join('');
+    message.innerHTML = `<p>Olá, <strong>${escapeHtml(nome)}</strong>, você foi designado em:</p><div class="mt-2">${linhas}</div><p class="mt-4">Gentileza procurar a mesa de indicadores para confirmar sua presença.</p>`;
+  } else {
+    message.innerHTML = `Olá, <strong>${escapeHtml(nome)}</strong>, você ainda não possui designações.`;
+  }
+  if(suppress) suppress.checked = false;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => document.querySelector('#designacoes-notification button')?.focus(), 0);
+  return true;
+}
+
+function confirmarNotificacaoDesignacoes(){
+  const suppress = document.getElementById('designacoes-notification-suppress');
+  if(suppress?.checked){
+    try { localStorage.setItem(chaveNotificacaoDesignacoes(), '1'); }
+    catch(err){ console.warn('Não foi possível salvar a preferência da notificação:', err); }
+  }
+  closeModal('designacoes-notification');
+  // A tela visual do Dashboard usa a chave interna "home"; "dashboard" não é uma aba existente.
+  const destino = isProfile(accessProfile, 'Indicador') ? 'escalas' : 'home';
+  showTab(destino);
 }
 
 async function entrarComoIndicador(){ return autenticarUsuarioSistema(); }
