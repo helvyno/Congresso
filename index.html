@@ -660,8 +660,8 @@ function updateDashboardDateOptions(){
   }
 
   const dates = [];
-  const inicioStr = ev.data_inicio.split('T')[0];
-  const finalStr = ev.data_final.split('T')[0];
+  const inicioStr = dateOnly(ev.data_inicio);
+  const finalStr = dateOnly(ev.data_final);
   let curr = new Date(inicioStr + 'T00:00:00');
   const end = new Date(finalStr + 'T00:00:00');
   while(curr <= end){
@@ -2891,15 +2891,15 @@ function renderTable(key){
 
   if (key === 'contagem') {
     if (contagemDataFilter !== 'ALL') {
-      rows = rows.filter(ct => ct.data && ct.data.split('T')[0] === contagemDataFilter);
+      rows = rows.filter(ct => dateOnly(ct.data) === contagemDataFilter);
     }
     if (contagemPeriodoFilter !== 'ALL') {
       rows = rows.filter(ct => String(ct.codperiodo) === String(contagemPeriodoFilter));
     }
 
     rows.sort((a, b) => {
-      const dataA = (a.data || '').split('T')[0];
-      const dataB = (b.data || '').split('T')[0];
+      const dataA = dateOnly(a.data);
+      const dataB = dateOnly(b.data);
       if (dataA !== dataB) return dataA.localeCompare(dataB);
 
       const perDescA = refRelationDescricao('periodo', a.codperiodo);
@@ -2914,7 +2914,7 @@ function renderTable(key){
 
   if (key === 'parametros') {
     if (parametroDataFilter !== 'ALL') {
-      rows = rows.filter(p => p.datacont && p.datacont.split('T')[0] === parametroDataFilter);
+      rows = rows.filter(p => dateOnly(p.datacont) === parametroDataFilter);
     }
     if (parametroPeriodoFilter !== 'ALL') {
       rows = rows.filter(p => String(p.codperiodo) === String(parametroPeriodoFilter));
@@ -2923,15 +2923,15 @@ function renderTable(key){
 
   if (key === 'escalas') {
     if (escalaDataFilter !== 'ALL') {
-      rows = rows.filter(es => es.data && es.data.split('T')[0] === escalaDataFilter);
+      rows = rows.filter(es => dateOnly(es.data) === escalaDataFilter);
     }
     if (escalaPeriodoFilter !== 'ALL') {
       rows = rows.filter(es => String(es.codperiodo) === String(escalaPeriodoFilter));
     }
 
     rows.sort((a, b) => {
-      const dataA = (a.data || '').split('T')[0];
-      const dataB = (b.data || '').split('T')[0];
+      const dataA = dateOnly(a.data);
+      const dataB = dateOnly(b.data);
       if (dataA !== dataB) return dataA.localeCompare(dataB);
 
       const setorA = refRelationDescricao('setor', a.codsetor);
