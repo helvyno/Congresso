@@ -1016,7 +1016,7 @@ function buildLayout(){
           ${!isPublicView ? `
           <div class="mt-6 bg-white border border-blue-200 rounded-xl p-4 shadow-sm">
             <div class="flex items-center justify-between flex-wrap gap-3">
-              <div><h4 class="text-sm font-bold text-slate-900 mb-1">Sugestão de Escalas</h4><p class="text-xs text-slate-500">Exibe as escalas cadastradas e sugere preenchimentos para os setores pendentes. O setor Mesa não participa de novas sugestões.</p></div>
+              <div><h4 class="text-sm font-bold text-slate-900 mb-1">Sugestão de Escalas</h4><p class="text-xs text-slate-500">Exibe somente as novas sugestões para os setores pendentes. O setor Mesa não participa de novas sugestões.</p></div>
               <div class="flex items-center gap-3 flex-wrap">
                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600"><input id="marcar-todas-sugestoes" type="checkbox" onchange="marcarTodasSugestoes(this.checked)" class="w-4 h-4 accent-blue-600"> Marcar Todos</label>
                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600" title="Considerar somente pessoas que confirmaram presença na Lista de Presença"><input id="sugestoes-somente-presentes" type="checkbox" onchange="alterarFiltroPresentes(this.checked)" class="w-4 h-4 accent-emerald-600"> Presentes</label>
@@ -1024,7 +1024,7 @@ function buildLayout(){
                 <button type="button" onclick="aprovarSugestoesEscalas()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Aprovar Sugestões</button>
               </div>
             </div>
-            <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500"><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1"></i>Escala já cadastrada</span><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 mr-1"></i>Sugestão nova</span><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mr-1"></i>Repetição necessária ou vaga pendente</span></div>
+            <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500"><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 mr-1"></i>Sugestão nova</span><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mr-1"></i>Repetição necessária ou vaga pendente</span></div>
             <div id="escala-sugestoes-container" class="mt-4"></div>
           </div>
           ` : ''}
@@ -2432,7 +2432,7 @@ function gerarSugestoesEscalas(){
 function renderSugestoesEscalas(){
   const container=document.getElementById('escala-sugestoes-container'); if(!container) return;
   if(!escalaSugestoesVisiveis){ container.innerHTML=''; return; }
-  const rows=[...escalaSugestoes].sort((a,b)=>dataEscalaISO(a.data).localeCompare(dataEscalaISO(b.data))||periodoDescricaoEscala(a.codperiodo).localeCompare(periodoDescricaoEscala(b.codperiodo))||pessoaNomeEscala(a.codpessoa).localeCompare(pessoaNomeEscala(b.codpessoa))||setorDescricaoEscala(a.codsetor).localeCompare(setorDescricaoEscala(b.codsetor)));
+  const rows=escalaSugestoes.filter(r=>r.__tipo!=='existente').sort((a,b)=>dataEscalaISO(a.data).localeCompare(dataEscalaISO(b.data))||periodoDescricaoEscala(a.codperiodo).localeCompare(periodoDescricaoEscala(b.codperiodo))||pessoaNomeEscala(a.codpessoa).localeCompare(pessoaNomeEscala(b.codpessoa))||setorDescricaoEscala(a.codsetor).localeCompare(setorDescricaoEscala(b.codsetor)));
   container.innerHTML=`<div class="border border-slate-200 rounded-lg overflow-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50 text-slate-500 uppercase"><tr><th class="px-3 py-2 text-left">Selecionar</th><th class="px-3 py-2 text-left">Data</th><th class="px-3 py-2 text-left">Período</th><th class="px-3 py-2 text-left">Pessoa</th><th class="px-3 py-2 text-left">Setor</th><th class="px-3 py-2 text-left">Situação</th></tr></thead><tbody>${rows.map((r,i)=>{const isSug=r.__tipo==='sugestao'; const isPendente=r.__tipo==='pendente'; const color=(isPendente || (isSug && r.__repetida)) ? 'text-red-600' : (isSug ? 'text-blue-600' : 'text-emerald-600'); const pessoaTexto=isPendente?'PENDENTE — nenhum Indicador elegível':pessoaNomeEscala(r.codpessoa); const situacao=isPendente?'Vaga não preenchida':(isSug?(r.__repetida?'Sugestão com repetição':'Sugestão nova'):'Já cadastrada'); return `<tr class="border-t border-slate-100 ${color}"><td class="px-3 py-2">${isSug?`<input type="checkbox" class="sugestao-checkbox w-4 h-4 accent-blue-600" data-index="${escalaSugestoes.indexOf(r)}" ${r.__selecionada===false?'':'checked'} onchange="marcarSugestao(${escalaSugestoes.indexOf(r)},this.checked)">`:'—'}</td><td class="px-3 py-2 whitespace-nowrap">${formatDateBR(r.data)}</td><td class="px-3 py-2 whitespace-nowrap">${escapeHtml(periodoDescricaoEscala(r.codperiodo))}</td><td class="px-3 py-2 font-semibold whitespace-nowrap">${escapeHtml(pessoaTexto)}</td><td class="px-3 py-2 whitespace-nowrap">${escapeHtml(setorDescricaoEscala(r.codsetor))}</td><td class="px-3 py-2">${situacao}</td></tr>`;}).join('')}</tbody></table></div>`;
 }
 function marcarSugestao(index,checked){ if(escalaSugestoes[index]) escalaSugestoes[index].__selecionada=checked; }
