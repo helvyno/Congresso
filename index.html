@@ -2369,8 +2369,19 @@ function gerarSugestoesEscalas(){
   const filtroPresentes=document.getElementById('sugestoes-somente-presentes');
   escalaSugestoesSomentePresentes=!!(filtroPresentes?.checked || escalaSugestoesSomentePresentes);
   if(!globalEventoId){ showToast('Selecione um evento antes de gerar sugestões.'); return; }
-  const parametros=(db.parametros||[]).filter(p=>Number(p.codevento)===Number(globalEventoId) && (p.ativo===true || String(p.ativo).toLowerCase()==='true' || Number(p.ativo)===1));
-  const slots=[...new Map(parametros.map(p=>[`${dataEscalaISO(p.datacont)}|${p.codperiodo}`,{data:dataEscalaISO(p.datacont),codperiodo:Number(p.codperiodo)}])).values()];
+  const eventoSimulacao=(db.evento||[]).find(e=>Number(e.codevento)===Number(globalEventoId));
+  const periodosSimulacao=(db.periodo||[]).filter(p=>p && p.codperiodo !== null && p.codperiodo !== undefined);
+  const dataInicioSimulacao=dateOnly(eventoSimulacao?.data_inicio);
+  const dataFinalSimulacao=dateOnly(eventoSimulacao?.data_final);
+  if(!dataInicioSimulacao || !dataFinalSimulacao){ showToast('O evento não possui período de datas válido para gerar sugestões.'); return; }
+  const slots=[];
+  const cursorSimulacao=new Date(`${dataInicioSimulacao}T00:00:00`);
+  const fimSimulacao=new Date(`${dataFinalSimulacao}T00:00:00`);
+  while(cursorSimulacao<=fimSimulacao){
+    const dataSlot=cursorSimulacao.toISOString().split('T')[0];
+    periodosSimulacao.forEach(per=>slots.push({data:dataSlot,codperiodo:Number(per.codperiodo)}));
+    cursorSimulacao.setDate(cursorSimulacao.getDate()+1);
+  }
   const setores=(db.setor||[]).filter(s=>Number(s.codevento)===Number(globalEventoId) && normalizeSearchText(s.descricao)!=='mesa');
   const pessoas=(db.pessoa||[]).filter(p=>Number(p.codevento)===Number(globalEventoId) && isProfile(refRelationDescricao('perfil',p.codperfil),'Indicador'));
   const disp=(db.pessoadisponibilidade||[]).filter(d=>Number(d.codevento)===Number(globalEventoId));
