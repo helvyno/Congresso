@@ -1083,6 +1083,21 @@ function buildLayout(){
                 </button>` : ''}
               </div>
             </div>
+            ${!isPublicView ? `
+            <div class="mt-4 bg-white border border-blue-200 rounded-xl p-4 shadow-sm">
+              <div class="flex items-center justify-between flex-wrap gap-3">
+                <div><h4 class="text-sm font-bold text-slate-900 mb-1">Sugestão de Escalas</h4><p class="text-xs text-slate-500">Exibe somente as novas sugestões para os setores pendentes. O setor Mesa não participa de novas sugestões.</p></div>
+                <div class="flex items-center gap-3 flex-wrap">
+                  <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600"><input id="marcar-todas-sugestoes" type="checkbox" onchange="marcarTodasSugestoes(this.checked)" class="w-4 h-4 accent-blue-600"> Marcar Todos</label>
+                  <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600" title="Considerar somente pessoas que confirmaram presença na Lista de Presença"><input id="sugestoes-somente-presentes" type="checkbox" onchange="alterarFiltroPresentes(this.checked)" class="w-4 h-4 accent-emerald-600"> Presentes</label>
+                  <button type="button" onclick="gerarSugestoesEscalas()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Sugerir Escalas</button>
+                  <button type="button" onclick="aprovarSugestoesEscalas()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Aprovar Sugestões</button>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500"><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 mr-1"></i>Sugestão nova</span><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mr-1"></i>Repetição necessária ou vaga pendente</span></div>
+              <div id="escala-sugestoes-container" class="mt-4"></div>
+            </div>
+            ` : ''}
             <div class="flex items-center gap-3 flex-wrap">
               <input type="text" placeholder="Buscar em ${e.plural.toLowerCase()}…" oninput="onSearch('${e.key}', this.value)"
                 class="w-full sm:w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm">
@@ -1101,21 +1116,6 @@ function buildLayout(){
               <div id="empty-${e.key}" class="hidden text-center text-slate-400 text-sm py-12"></div>
             </div>
           </div>
-          ${!isPublicView ? `
-          <div class="mt-6 bg-white border border-blue-200 rounded-xl p-4 shadow-sm">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-              <div><h4 class="text-sm font-bold text-slate-900 mb-1">Sugestão de Escalas</h4><p class="text-xs text-slate-500">Exibe somente as novas sugestões para os setores pendentes. O setor Mesa não participa de novas sugestões.</p></div>
-              <div class="flex items-center gap-3 flex-wrap">
-                <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600"><input id="marcar-todas-sugestoes" type="checkbox" onchange="marcarTodasSugestoes(this.checked)" class="w-4 h-4 accent-blue-600"> Marcar Todos</label>
-                <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600" title="Considerar somente pessoas que confirmaram presença na Lista de Presença"><input id="sugestoes-somente-presentes" type="checkbox" onchange="alterarFiltroPresentes(this.checked)" class="w-4 h-4 accent-emerald-600"> Presentes</label>
-                <button type="button" onclick="gerarSugestoesEscalas()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Sugerir Escalas</button>
-                <button type="button" onclick="aprovarSugestoesEscalas()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm">Aprovar Sugestões</button>
-              </div>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500"><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 mr-1"></i>Sugestão nova</span><span><i class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mr-1"></i>Repetição necessária ou vaga pendente</span></div>
-            <div id="escala-sugestoes-container" class="mt-4"></div>
-          </div>
-          ` : ''}
         </div>
       `;
     }
