@@ -481,16 +481,22 @@ async function loadDBForLogin(){
     const eventos = await apiList('evento');
     db['evento'] = eventos;
     const selectWelcome = document.getElementById('welcome-evento-select');
-    if(selectWelcome && eventos.length > 0){
-      selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
+    if(selectWelcome){
+      if(eventos.length === 1){
+        const unicoEvento = eventos[0];
+        selectWelcome.innerHTML = `<option value="${unicoEvento.codevento}" selected>${escapeHtml(unicoEvento.descricao)}</option>`;
+        onWelcomeEventoChange(String(unicoEvento.codevento));
+      } else {
+        selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
+        onWelcomeEventoChange('');
+      }
     }
   } catch(err) {
     console.error("Erro ao carregar eventos para login:", err);
   }
   checkDbStatus();
-  onWelcomeEventoChange('');
+    onWelcomeEventoChange(document.getElementById('welcome-evento-select')?.value || '');
 }
-
 function onWelcomeEventoChange(val){
   const btnIndicador = document.getElementById('btn-entrar-indicador');
   const passwordError = document.getElementById('password-error-msg');
@@ -4017,6 +4023,16 @@ function showToast(msg){
   toast.classList.remove('translate-y-20','opacity-0');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>{ toast.classList.add('translate-y-20','opacity-0'); }, 4000);
+}
+
+const welcomeUserInput = document.getElementById('welcome-password');
+if(welcomeUserInput){
+  welcomeUserInput.addEventListener('keydown', event => {
+    if(event.key === 'Enter'){
+      event.preventDefault();
+      autenticarUsuarioSistema();
+    }
+  });
 }
 
 iniciarCadastroPublico().then(isPublic => { if(!isPublic) loadDBForLogin(); });
