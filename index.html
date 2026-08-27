@@ -218,6 +218,24 @@ const API_BASE = 'https://congresso-5p1a.onrender.com';
 let sidebarOpen = false;
 let isPublicView = true;
 let currentUser = null;
+function restaurarLayoutAutenticado(){
+  if(isPublicView) return;
+  const welcome = document.getElementById('welcome-screen');
+  const header = document.getElementById('main-header');
+  const mainContent = document.getElementById('main-content');
+  const publicNav = document.getElementById('public-horizontal-nav');
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+  welcome?.classList.add('hidden');
+  header?.classList.remove('hidden');
+  mainContent?.classList.remove('hidden');
+  publicNav?.classList.add('hidden');
+  publicNav?.classList.remove('flex');
+  toggleBtn?.classList.remove('hidden');
+  // Remove também estados nativos/inline que podem persistir após a transição
+  // do fluxo público para o shell autenticado no Chrome iOS/iPadOS.
+  if(header){ header.hidden = false; header.style.removeProperty('display'); }
+  if(mainContent){ mainContent.hidden = false; mainContent.style.removeProperty('display'); }
+}
 let accessProfile = '';
 let isIndicatorAccess = false;
 let chartInstance1 = null;
@@ -241,6 +259,8 @@ let parametroPeriodoFilter = 'ALL';
 let escalaDataFilter = 'ALL';
 let escalaPeriodoFilter = 'ALL';
 let presencaDateFilter = 'ALL';
+let mapaEscalaDataFilter = 'ALL';
+let mapaEscalaPeriodoFilter = 'ALL';
 
 function toggleSidebar(e) {
   if (e) e.stopPropagation();
@@ -284,7 +304,8 @@ const ICONS = {
   presenca: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>',
   disponibilidade: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zm3 10l2 2 4-4"></path>',
   bi: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8"></path>',
-  qrcode: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 2h2m2-2h2v2m-4 2h2m2 0h2"></path>'
+  qrcode: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 2h2m2-2h2v2m-4 2h2m2 0h2"></path>',
+  mapaescala: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>'
 };
 
 const AVAILABLE_MENUS = [
@@ -294,6 +315,7 @@ const AVAILABLE_MENUS = [
   { key: 'QRCode', label: 'QRCode' },
   { key: 'Designações', label: 'Designações' },
   { key: 'Mapa do Evento', label: 'Mapa do Evento' },
+  { key: 'Mapa com Escalas', label: 'Mapa com Escalas' },
   { key: 'Lista de Presença', label: 'Lista de Presença' },
   { key: 'Eventos', label: 'Eventos' },
   { key: 'Setores', label: 'Setores' },
@@ -314,6 +336,7 @@ const ENTITIES = [
   { key:'qrcode', label:'QRCode', plural:'QRCode', isCustomQRCode:true },
   { key:'designacoes', label:'Designação', plural:'Designações', isCustom:true },
   { key:'mapa', label:'Mapa', plural:'Mapa do Evento', isCustomMap:true },
+  { key:'mapaescala', label:'Mapa com Escalas', plural:'Mapa com Escalas', isCustomMapaEscala:true },
   { key:'presenca', label:'Presença', plural:'Lista de Presença', isCustomPresenca:true },
   { key:'disponibilidade', label:'Disponibilidade', plural:'Disponibilidade', isCustomDisponibilidade:true },
   { key:'evento', label:'Evento', plural:'Eventos', pk:'codevento', display:r=>r.descricao, fields:[
@@ -519,7 +542,7 @@ function onWelcomeEventoChange(val){
 }
 
 async function loadDB(){
-  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+  const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isCustomMapaEscala && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
   const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
   let hasError = false;
 
@@ -544,7 +567,7 @@ async function loadDB(){
 
 async function atualizarBancoDashboard() {
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isCustomMapaEscala && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     let hasError = false;
 
@@ -640,7 +663,7 @@ async function autenticarUsuarioSistema(){
     isIndicatorAccess = isProfile(accessProfile, 'Indicador');
     isPublicView = isIndicatorAccess;
     current = isIndicatorAccess ? 'designacoes' : 'home';
-    document.getElementById('welcome-screen')?.classList.add('hidden');
+    restaurarLayoutAutenticado();
     await loadDB();
     abrirNotificacaoDesignacoes();
   }catch(err){
@@ -707,7 +730,11 @@ function confirmarNotificacaoDesignacoes(){
   closeModal('designacoes-notification');
   // A tela visual do Dashboard usa a chave interna "home"; "dashboard" não é uma aba existente.
   const destino = isProfile(accessProfile, 'Indicador') ? 'escalas' : 'home';
-  showTab(destino);
+  current = destino;
+  // Após fechar a notificação, reconstrói o shell de forma síncrona. Isso evita
+  // que chamadas assíncronas de showTab concorram com o fechamento do modal no Chrome iOS/iPadOS.
+  buildLayout();
+  restaurarLayoutAutenticado();
 }
 
 async function entrarComoIndicador(){ return autenticarUsuarioSistema(); }
@@ -844,14 +871,13 @@ function buildLayout(){
     publicNav.classList.remove('flex');
     // Restaura explicitamente o layout autenticado. Isso evita que o estado
     // oculto usado pelo cadastro público permaneça no Chrome para iOS/iPadOS.
-    document.getElementById('main-header')?.classList.remove('hidden');
-    document.getElementById('main-content')?.classList.remove('hidden');
+    restaurarLayoutAutenticado();
     let visibleEntities = ENTITIES;
     nav.innerHTML = visibleEntities.map(e=>`
       <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[e.key] || ICONS.evento}</svg>
         <span class="truncate">${e.plural}</span>
-        ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
+        ${!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomMapaEscala && !e.isCustomPresenca && !e.isCustomDisponibilidade ? `<span class="nav-count" id="nav-count-${e.key}">0</span>` : ''}
       </button>
     `).join('');
   }
@@ -870,6 +896,9 @@ function buildLayout(){
     }
     if(e.isCustomMap){
       return `<div id="tab-mapa" class="tab-content overflow-y-auto ${current==='mapa'?'active':''}"></div>`;
+    }
+    if(e.isCustomMapaEscala){
+      return `<div id="tab-mapaescala" class="tab-content overflow-y-auto ${current==='mapaescala'?'active':''}"></div>`;
     }
     if(e.isCustomPresenca){
       return `<div id="tab-presenca" class="tab-content overflow-y-auto ${current==='presenca'?'active':''}"></div>`;
@@ -1215,7 +1244,7 @@ function buildLayout(){
   }).join('');
 
   if (isPublicView && (current === 'home' || current === 'relatorios' || current === 'presenca' || current === 'escalas')) current = 'designacoes';
-  ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca).forEach(e=>{ e._search=''; });
+  ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomMapaEscala).forEach(e=>{ e._search=''; });
   
   const tabDes = document.getElementById('tab-designacoes');
   if(tabDes){
@@ -1317,8 +1346,9 @@ function buildLayout(){
 async function showTab(key){
   if(isPublicView && !isIndicatorAccess && (key === 'relatorios' || key === 'presenca' || key === 'bi')) return;
   current = key;
+  restaurarLayoutAutenticado();
   const mainContent = document.getElementById('main-content');
-  const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'disponibilidade', 'pessoa', 'escalas', 'contagem'];
+  const pageScrollTabs = ['parametros', 'designacoes', 'presenca', 'disponibilidade', 'pessoa', 'escalas', 'contagem', 'mapaescala'];
   if(mainContent) mainContent.classList.toggle('page-scroll-mode', pageScrollTabs.includes(key));
   // O menu lateral fecha ao selecionar uma opção; o cabeçalho permanece sempre visível.
   sidebarOpen = false;
@@ -1329,7 +1359,7 @@ async function showTab(key){
   const toggleBtn = document.getElementById('sidebar-toggle-btn');
   if(toggleBtn && !isPublicView) toggleBtn.classList.remove('hidden');
   try {
-    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
+    const activeEntities = [...ENTITIES.filter(e => !e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomDisponibilidade && !e.isCustomQRCode && !e.isCustomMapaEscala && !e.isBI), { key: 'pessoadisponibilidade' }, { key: 'listapresenca' }, { key: 'bi' }];
     const results = await Promise.allSettled(activeEntities.map(e => apiList(e.key)));
     activeEntities.forEach((e, idx) => {
       if (results[idx].status === 'fulfilled') {
@@ -1420,6 +1450,8 @@ function renderCurrentTab(){
     renderDesignacoes();
   } else if(current === 'mapa'){
     renderMapa();
+  } else if(current === 'mapaescala'){
+    renderMapaComEscalas();
     } else if(current === 'presenca'){
       renderPresenca();
     } else if(current === 'disponibilidade'){
@@ -2814,6 +2846,70 @@ async function renderMapa(){
   `;
 }
 
+const MAPA_ESCALA_POSICOES = {
+  1:[36,95], 2:[45,95], 3:[21,75], 4:[34,75], 5:[47,75], 6:[59,75], 7:[72,75],
+  8:[16,61], 9:[30,61], 10:[43,61], 11:[55,61], 12:[68,61],
+  13:[18,47], 14:[31,47], 15:[43,47], 16:[56,47], 17:[68,47], 18:[79,42],
+  19:[18,34], 20:[31,34], 21:[43,34], 22:[56,34], 23:[68,34],
+  24:[27,21], 25:[69,21], 26:[36,13]
+};
+function primeiroNomeMapaEscala(id){
+  const nome = pessoaNomeEscala(id);
+  return String(nome || 'Pessoa').trim().split(/\s+/)[0] || 'Pessoa';
+}
+function mapaEscalaOpcoesData(){
+  const evento = (db.evento || []).find(e => Number(e.codevento) === Number(globalEventoId));
+  const inicio = dateOnly(evento?.data_inicio), fim = dateOnly(evento?.data_final);
+  let html = '<option value="ALL">Todas as Datas</option>';
+  if(!inicio || !fim) return html;
+  const cursor = new Date(`${inicio}T00:00:00`), limite = new Date(`${fim}T00:00:00`);
+  while(cursor <= limite){
+    const valor = `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`;
+    html += `<option value="${valor}" ${valor === mapaEscalaDataFilter ? 'selected' : ''}>${formatDateBR(valor)}</option>`;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return html;
+}
+function mapaEscalaOpcoesPeriodo(){
+  return '<option value="ALL">Todos os Períodos</option>' + (db.periodo || []).map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(mapaEscalaPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao || 'Período')}</option>`).join('');
+}
+function changeMapaEscalaData(value){ mapaEscalaDataFilter = value || 'ALL'; renderMapaComEscalas(); }
+function changeMapaEscalaPeriodo(value){ mapaEscalaPeriodoFilter = value || 'ALL'; renderMapaComEscalas(); }
+async function renderMapaComEscalas(){
+  const tab = document.getElementById('tab-mapaescala');
+  if(!tab) return;
+  let mapaRec = null;
+  try {
+    const res = await apiList('configmapa');
+    mapaRec = (res || []).find(m => !globalEventoId || Number(m.codevento) === Number(globalEventoId));
+  } catch(err) { console.warn('Não foi possível carregar o mapa com escalas:', err); }
+  const imgSrc = mapaRec?.imagem_base64 || '';
+  const dataSelecionada = mapaEscalaDataFilter;
+  const periodoSelecionado = mapaEscalaPeriodoFilter;
+  const escalasFiltradas = (db.escalas || []).filter(es =>
+    Number(es.codevento) === Number(globalEventoId) &&
+    (dataSelecionada === 'ALL' || dateOnly(es.data) === dataSelecionada) &&
+    (periodoSelecionado === 'ALL' || Number(es.codperiodo) === Number(periodoSelecionado))
+  );
+  const pessoasPorSetor = new Map();
+  escalasFiltradas.forEach(es => {
+    const setor = (db.setor || []).find(s => Number(s.codsetor) === Number(es.codsetor) && Number(s.codevento) === Number(globalEventoId));
+    const match = String(setor?.descricao || '').match(/\b(\d{1,2})\b/);
+    if(!match) return;
+    const numero = Number(match[1]);
+    if(!MAPA_ESCALA_POSICOES[numero]) return;
+    const nome = primeiroNomeMapaEscala(es.codpessoa);
+    const nomes = pessoasPorSetor.get(numero) || [];
+    if(!nomes.includes(nome)) nomes.push(nome);
+    pessoasPorSetor.set(numero, nomes);
+  });
+  const overlays = [...pessoasPorSetor.entries()].map(([numero, nomes]) => {
+    const [left, top] = MAPA_ESCALA_POSICOES[numero];
+    return `<div title="Setor ${String(numero).padStart(2,'0')}" class="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md bg-blue-700/95 px-1.5 py-0.5 text-center text-[10px] font-bold leading-tight text-white shadow-md ring-1 ring-white/80 whitespace-nowrap" style="left:${left}%;top:${top}%">${nomes.map(n => escapeHtml(n)).join('<br>')}</div>`;
+  }).join('');
+  const semFiltro = dataSelecionada === 'ALL' && periodoSelecionado === 'ALL';
+  tab.innerHTML = `<div class="flex-shrink-0 mb-4"><div class="flex flex-wrap items-start justify-between gap-4"><div><h2 class="text-2xl font-bold text-slate-900 mb-1">Mapa com Escalas</h2><p class="text-slate-500 text-sm">Mapa do evento com os primeiros nomes das pessoas escaladas por setor.</p></div><div class="flex flex-wrap items-center gap-3"><div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm"><span class="text-xs text-slate-500 font-medium">Data:</span><select onchange="changeMapaEscalaData(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">${mapaEscalaOpcoesData()}</select></div><div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm"><span class="text-xs text-slate-500 font-medium">Período:</span><select onchange="changeMapaEscalaPeriodo(this.value)" class="bg-slate-50 text-sm font-semibold text-blue-600 px-2 py-1 rounded border border-slate-200 focus:outline-none cursor-pointer">${mapaEscalaOpcoesPeriodo()}</select></div></div></div></div><div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-6"><div class="mb-3 flex flex-wrap items-center justify-between gap-2"><p class="text-xs text-slate-500">${semFiltro ? 'Selecione uma data e um período para visualizar as escalas no mapa.' : `${pessoasPorSetor.size} setor(es) com escala(s) no filtro atual.`}</p><span class="text-[11px] text-slate-400">A imagem original não é modificada.</span></div>${imgSrc ? `<div class="w-full overflow-auto rounded-lg bg-slate-50 p-2"><div class="relative mx-auto w-max max-w-full"><img src="${imgSrc}" alt="Mapa do evento com escalas" class="block h-auto w-auto max-w-full"><div class="absolute inset-0">${overlays}</div></div></div>` : `<div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">Nenhum mapa cadastrado para este evento.</div>`}</div>`;
+}
 function updateMapTransform() {
   const img = document.getElementById('map-image');
   if(img) {
