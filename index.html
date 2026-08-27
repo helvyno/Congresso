@@ -676,8 +676,10 @@ function abrirNotificacaoDesignacoes(){
   if(designacoes.length){
     const linhas = designacoes.map(es => {
       const data = escapeHtml(formatDateBR(es.data));
+      const periodoRegistro = findRecord('periodo', es.codperiodo);
+      const periodo = escapeHtml(periodoRegistro?.descricao || periodoDescricaoEscala(es.codperiodo) || 'Período não informado');
       const setor = escapeHtml(setorDescricaoEscala(es.codsetor));
-      return `<div class="mt-1"><strong>${data}</strong> - <strong>${setor}</strong></div>`;
+      return `<div class="mt-1"><strong>${data}</strong> - <strong>${periodo}</strong> - <strong>${setor}</strong></div>`;
     }).join('');
     message.innerHTML = `<p>Olá, <strong>${escapeHtml(nome)}</strong>, você foi designado em:</p><div class="mt-2">${linhas}</div><p class="mt-4">Gentileza procurar a mesa de indicadores para confirmar sua presença.</p>`;
   } else {
