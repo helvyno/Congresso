@@ -838,11 +838,14 @@ function buildLayout(){
       </button>
     `).join('');
 
-  } else {
+    } else {
     if(toggleBtn) toggleBtn.classList.remove('hidden');
     publicNav.classList.add('hidden');
     publicNav.classList.remove('flex');
-
+    // Restaura explicitamente o layout autenticado. Isso evita que o estado
+    // oculto usado pelo cadastro público permaneça no Chrome para iOS/iPadOS.
+    document.getElementById('main-header')?.classList.remove('hidden');
+    document.getElementById('main-content')?.classList.remove('hidden');
     let visibleEntities = ENTITIES;
     nav.innerHTML = visibleEntities.map(e=>`
       <button onclick="showTab('${e.key}')" id="nav-${e.key}" class="nav-btn ${e.key===current?'active':''} flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all w-full text-left overflow-hidden text-ellipsis">
