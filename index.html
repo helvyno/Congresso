@@ -453,9 +453,32 @@ function escapeHtml(str){
     .replace(/'/g, '&#39;');
 }
 
+const API_REQUEST_TIMEOUT_MS = 30000;
+const API_RETRY_DELAYS_MS = [700, 1500];
+
+async function fetchApi(url, options = {}, { retries = 0 } = {}){
+  let lastError;
+  for(let attempt = 0; attempt <= retries; attempt++){
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+    try{
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeout);
+      if(response.ok || attempt === retries || ![408, 429, 500, 502, 503, 504].includes(response.status)) return response;
+      lastError = new Error(`Servidor indisponível (HTTP ${response.status}).`);
+    }catch(err){
+      clearTimeout(timeout);
+      lastError = err.name === 'AbortError' ? new Error('O servidor demorou para responder. Tente novamente.') : err;
+      if(attempt === retries) throw lastError;
+    }
+    await new Promise(resolve => setTimeout(resolve, API_RETRY_DELAYS_MS[attempt] || 1500));
+  }
+  throw lastError || new Error('Não foi possível comunicar com o servidor.');
+}
+
 async function apiList(table){
   const query = (table === 'bi' || table === 'pessoadisponibilidade') && globalEventoId ? `?codevento=${encodeURIComponent(globalEventoId)}` : '';
-  const r = await fetch(`${API_BASE}/api/${table}${query}`);
+  const r = await fetchApi(`${API_BASE}/api/${table}${query}`, {}, { retries: 2 });
   if(!r.ok) {
     const errorData = await r.json().catch(() => ({}));
     throw new Error(errorData.error || 'Falha ao carregar ' + table);
@@ -500,25 +523,27 @@ async function checkDbStatus(){
 }
 
 async function loadDBForLogin(){
+  const selectWelcome = document.getElementById('welcome-evento-select');
+  if(selectWelcome) selectWelcome.innerHTML = '<option value="" disabled selected>Carregando eventos…</option>';
   try {
     const eventos = await apiList('evento');
-    db['evento'] = eventos;
-    const selectWelcome = document.getElementById('welcome-evento-select');
+    db['evento'] = Array.isArray(eventos) ? eventos : [];
     if(selectWelcome){
-      if(eventos.length === 1){
-        const unicoEvento = eventos[0];
+      if(db.evento.length === 1){
+        const unicoEvento = db.evento[0];
         selectWelcome.innerHTML = `<option value="${unicoEvento.codevento}" selected>${escapeHtml(unicoEvento.descricao)}</option>`;
-        onWelcomeEventoChange(String(unicoEvento.codevento));
       } else {
-        selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
-        onWelcomeEventoChange('');
+        selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + db.evento.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
       }
     }
   } catch(err) {
-    console.error("Erro ao carregar eventos para login:", err);
+    console.error('Erro ao carregar eventos para login:', err);
+    if(selectWelcome) selectWelcome.innerHTML = '<option value="" disabled selected>Não foi possível carregar os eventos</option>';
+    showToast('Não foi possível carregar os eventos. Verifique a conexão e tente novamente.');
+  } finally {
+    checkDbStatus();
+    onWelcomeEventoChange(selectWelcome?.value || '');
   }
-  checkDbStatus();
-    onWelcomeEventoChange(document.getElementById('welcome-evento-select')?.value || '');
 }
 function onWelcomeEventoChange(val){
   const btnIndicador = document.getElementById('btn-entrar-indicador');
@@ -648,13 +673,17 @@ async function autenticarUsuarioSistema(){
   const selectWelcome = document.getElementById('welcome-evento-select');
   const userInput = document.getElementById('welcome-password');
   const error = document.getElementById('password-error-msg');
+  const button = document.getElementById('btn-entrar-indicador');
   if(error) error.classList.add('hidden');
   if(userInput) userInput.classList.remove('field-error');
   if(!selectWelcome?.value){ showToast('Selecione um evento para prosseguir.'); return; }
   const usuario = normalizeIdentity(userInput?.value || '');
   if(!usuario){ if(userInput) userInput.classList.add('field-error'); showToast('Informe seu usuário.'); return; }
+  if(button?.disabled) return;
+  const originalButtonHtml = button?.innerHTML;
+  if(button){ button.disabled = true; button.innerHTML = '<span class="animate-pulse">Entrando…</span>'; button.classList.add('opacity-70'); }
   try{
-    const response = await fetch(`${API_BASE}/api/autenticar`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codevento:Number(selectWelcome.value), usuario})});
+    const response = await fetchApi(`${API_BASE}/api/autenticar`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codevento:Number(selectWelcome.value), usuario})}, { retries: 2 });
     const data = await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(data.error || 'Usuário não encontrado ou sem acesso a este evento.');
     globalEventoId = Number(selectWelcome.value);
@@ -670,6 +699,8 @@ async function autenticarUsuarioSistema(){
     if(error){ error.textContent=err.message; error.classList.remove('hidden'); }
     if(userInput) userInput.classList.add('field-error');
     showToast(err.message);
+  }finally{
+    if(button){ button.disabled = false; button.innerHTML = originalButtonHtml || '<span>Entrar</span>'; button.classList.remove('opacity-70'); }
   }
 }
 
@@ -735,6 +766,11 @@ function confirmarNotificacaoDesignacoes(){
   // que chamadas assíncronas de showTab concorram com o fechamento do modal no Chrome iOS/iPadOS.
   buildLayout();
   restaurarLayoutAutenticado();
+  // Após a confirmação, o administrador já recebe o menu aberto, inclusive em telas móveis.
+  if(!isPublicView){
+    sidebarOpen = true;
+    document.getElementById('sidebar-nav')?.classList.remove('hidden');
+  }
 }
 
 async function entrarComoIndicador(){ return autenticarUsuarioSistema(); }
