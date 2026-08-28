@@ -31,6 +31,12 @@
   .nav-btn.active { background-color: #3b82f6; color: white; }
   .nav-btn { color: #64748b; }
   .nav-btn:hover:not(.active) { background-color: #f1f5f9; color: #0f172a; }
+  /* Menu horizontal do Indicador: área visualmente identificável como navegação. */
+  #public-horizontal-nav { background: #eff6ff; border: 2px solid #93c5fd; border-radius: 14px; padding: 4px; box-shadow: 0 4px 12px rgba(37, 99, 235, .14); }
+  #public-horizontal-nav .indicator-menu-label { color: #1d4ed8; font-size: 10px; font-weight: 800; letter-spacing: .08em; white-space: nowrap; padding: 0 8px 0 10px; }
+  #public-horizontal-nav .nav-btn { color: #1e40af; }
+  #public-horizontal-nav .nav-btn:hover:not(.active) { background-color: #dbeafe; color: #1e3a8a; }
+  #public-horizontal-nav .nav-btn.active { background-color: #2563eb; color: white; box-shadow: 0 2px 5px rgba(37, 99, 235, .3); }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: #f8fafc; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -219,7 +225,10 @@ let sidebarOpen = false;
 let isPublicView = true;
 let currentUser = null;
 function restaurarLayoutAutenticado(){
-  if(isPublicView) return;
+  // O acesso de Indicador usa isPublicView para limitar o menu, mas ainda é
+  // um acesso autenticado e precisa ocultar a tela inicial. Somente o cadastro
+  // público por QRCode deve permanecer fora do shell autenticado.
+  if(isPublicCadastro) return;
   const welcome = document.getElementById('welcome-screen');
   const header = document.getElementById('main-header');
   const mainContent = document.getElementById('main-content');
@@ -228,9 +237,18 @@ function restaurarLayoutAutenticado(){
   welcome?.classList.add('hidden');
   header?.classList.remove('hidden');
   mainContent?.classList.remove('hidden');
-  publicNav?.classList.add('hidden');
-  publicNav?.classList.remove('flex');
-  toggleBtn?.classList.remove('hidden');
+  if(isPublicView){
+    // Indicadores usam o menu horizontal no cabeçalho e não o menu lateral.
+    publicNav?.classList.remove('hidden');
+    publicNav?.classList.add('flex');
+    toggleBtn?.classList.add('hidden');
+    document.getElementById('sidebar-nav')?.classList.add('hidden');
+  } else {
+    // Administradores usam o menu lateral e não exibem o menu horizontal.
+    publicNav?.classList.add('hidden');
+    publicNav?.classList.remove('flex');
+    toggleBtn?.classList.remove('hidden');
+  }
   // Remove também estados nativos/inline que podem persistir após a transição
   // do fluxo público para o shell autenticado no Chrome iOS/iPadOS.
   if(header){ header.hidden = false; header.style.removeProperty('display'); }
@@ -691,9 +709,18 @@ async function autenticarUsuarioSistema(){
     accessProfile = data.perfil || '';
     isIndicatorAccess = isProfile(accessProfile, 'Indicador');
     isPublicView = isIndicatorAccess;
-    current = isIndicatorAccess ? 'designacoes' : 'home';
+    // O primeiro acesso do Indicador começa no Dashboard; o menu horizontal
+    // permanece disponível para acessar Escalas, Contagem e demais telas.
+    current = 'home';
     restaurarLayoutAutenticado();
     await loadDB();
+    // loadDB também monta o layout, mas a sincronização iniciada pelo evento
+    // pode terminar em ordem diferente no primeiro acesso. A renderização final
+    // explícita evita que o Dashboard permaneça vazio.
+    buildLayout();
+    renderCurrentTab();
+    document.getElementById('main-content')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.querySelector('.tab-content.active')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     abrirNotificacaoDesignacoes();
   }catch(err){
     if(error){ error.textContent=err.message; error.classList.remove('hidden'); }
@@ -760,7 +787,7 @@ function confirmarNotificacaoDesignacoes(){
   }
   closeModal('designacoes-notification');
   // A tela visual do Dashboard usa a chave interna "home"; "dashboard" não é uma aba existente.
-  const destino = isProfile(accessProfile, 'Indicador') ? 'escalas' : 'home';
+  const destino = 'home';
   current = destino;
   // Após fechar a notificação, reconstrói o shell de forma síncrona. Isso evita
   // que chamadas assíncronas de showTab concorram com o fechamento do modal no Chrome iOS/iPadOS.
@@ -894,7 +921,7 @@ function buildLayout(){
       { key: 'home', label: 'Dashboard', icon: ICONS.home }
     ];
 
-    publicNav.innerHTML = publicMenus.map(m => `
+    publicNav.innerHTML = '<span class="indicator-menu-label" aria-hidden="true">MENU</span>' + publicMenus.map(m => `
       <button onclick="showTab('${m.key}')" id="pub-nav-${m.key}" class="nav-btn ${m.key===current?'active':''} flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${m.icon}</svg>
         <span>${m.label}</span>
@@ -1279,7 +1306,8 @@ function buildLayout(){
     `;
   }).join('');
 
-  if (isPublicView && (current === 'home' || current === 'relatorios' || current === 'presenca' || current === 'escalas')) current = 'designacoes';
+  // O Dashboard é a tela inicial também para Indicadores. Não sobrescrever
+  // current aqui, pois isso apagava a escolha feita no login.
   ENTITIES.filter(e=>!e.isHome && !e.isReport && !e.isCustom && !e.isCustomMap && !e.isCustomPresenca && !e.isCustomMapaEscala).forEach(e=>{ e._search=''; });
   
   const tabDes = document.getElementById('tab-designacoes');
