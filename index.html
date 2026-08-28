@@ -37,6 +37,16 @@
   #public-horizontal-nav .nav-btn { color: #1e40af; }
   #public-horizontal-nav .nav-btn:hover:not(.active) { background-color: #dbeafe; color: #1e3a8a; }
   #public-horizontal-nav .nav-btn.active { background-color: #2563eb; color: white; box-shadow: 0 2px 5px rgba(37, 99, 235, .3); }
+  #main-header { position: fixed; top: 0; left: 0; right: 0; min-height: 72px; overflow: visible; }
+  #main-header + div { margin-top: 72px; height: calc(100dvh - 72px); }
+  #public-horizontal-nav { position: relative; z-index: 60; flex-shrink: 1; max-width: min(100%, 820px); }
+  #sidebar-nav.menu-visible { display: block !important; visibility: visible !important; opacity: 1 !important; }
+  #public-horizontal-nav.menu-visible { display: flex !important; visibility: visible !important; opacity: 1 !important; }
+  @media (max-width: 900px) {
+    #main-header { align-items: center; }
+    #main-header + div { margin-top: 126px; height: calc(100dvh - 126px); }
+    #public-horizontal-nav { order: 3; flex-basis: 100%; width: 100%; max-width: 100%; justify-content: flex-start; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: #f8fafc; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -224,6 +234,7 @@ const API_BASE = 'https://congresso-5p1a.onrender.com';
 let sidebarOpen = false;
 let isPublicView = true;
 let currentUser = null;
+let isPublicCadastro = false;
 function restaurarLayoutAutenticado(){
   // O acesso de Indicador usa isPublicView para limitar o menu, mas ainda é
   // um acesso autenticado e precisa ocultar a tela inicial. Somente o cadastro
@@ -253,6 +264,32 @@ function restaurarLayoutAutenticado(){
   // do fluxo público para o shell autenticado no Chrome iOS/iPadOS.
   if(header){ header.hidden = false; header.style.removeProperty('display'); }
   if(mainContent){ mainContent.hidden = false; mainContent.style.removeProperty('display'); }
+}
+
+function mostrarMenuInicial(){
+  if(isPublicCadastro) return;
+  const publicNav = document.getElementById('public-horizontal-nav');
+  const sidebar = document.getElementById('sidebar-nav');
+  if(isPublicView){
+    publicNav?.classList.remove('hidden');
+    publicNav?.classList.add('flex');
+    publicNav?.classList.add('menu-visible');
+    if(publicNav){ publicNav.hidden = false; publicNav.style.display = 'flex'; }
+    sidebar?.classList.add('hidden');
+    sidebar?.classList.remove('menu-visible');
+    if(sidebar){ sidebar.hidden = true; sidebar.style.removeProperty('display'); }
+    sidebarOpen = false;
+  } else {
+    publicNav?.classList.add('hidden');
+    publicNav?.classList.remove('flex');
+    publicNav?.classList.remove('menu-visible');
+    if(publicNav){ publicNav.hidden = true; publicNav.style.removeProperty('display'); }
+    // O menu lateral começa fechado e só abre pelo botão hambúrguer.
+    sidebar?.classList.add('hidden');
+    sidebar?.classList.remove('menu-visible');
+    if(sidebar){ sidebar.hidden = true; sidebar.style.removeProperty('display'); }
+    sidebarOpen = false;
+  }
 }
 let accessProfile = '';
 let isIndicatorAccess = false;
@@ -287,8 +324,14 @@ function toggleSidebar(e) {
   if(!sidebar) return;
   if(sidebarOpen){
     sidebar.classList.remove('hidden');
+    sidebar.classList.add('menu-visible');
+    sidebar.hidden = false;
+    sidebar.style.display = 'block';
   } else {
     sidebar.classList.add('hidden');
+    sidebar.classList.remove('menu-visible');
+    sidebar.hidden = true;
+    sidebar.style.removeProperty('display');
   }
 }
 
@@ -300,6 +343,9 @@ document.addEventListener('click', function(e) {
   if (sidebarOpen && !sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
     sidebarOpen = false;
     sidebar.classList.add('hidden');
+    sidebar.classList.remove('menu-visible');
+    sidebar.hidden = true;
+    sidebar.style.removeProperty('display');
   }
 });
 
@@ -719,6 +765,7 @@ async function autenticarUsuarioSistema(){
     // explícita evita que o Dashboard permaneça vazio.
     buildLayout();
     renderCurrentTab();
+    mostrarMenuInicial();
     document.getElementById('main-content')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     document.querySelector('.tab-content.active')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     abrirNotificacaoDesignacoes();
@@ -793,11 +840,7 @@ function confirmarNotificacaoDesignacoes(){
   // que chamadas assíncronas de showTab concorram com o fechamento do modal no Chrome iOS/iPadOS.
   buildLayout();
   restaurarLayoutAutenticado();
-  // Após a confirmação, o administrador já recebe o menu aberto, inclusive em telas móveis.
-  if(!isPublicView){
-    sidebarOpen = true;
-    document.getElementById('sidebar-nav')?.classList.remove('hidden');
-  }
+  mostrarMenuInicial();
 }
 
 async function entrarComoIndicador(){ return autenticarUsuarioSistema(); }
@@ -1417,7 +1460,12 @@ async function showTab(key){
   // O menu lateral fecha ao selecionar uma opção; o cabeçalho permanece sempre visível.
   sidebarOpen = false;
   const sidebar = document.getElementById('sidebar-nav');
-  if(sidebar) sidebar.classList.add('hidden');
+  if(sidebar){
+    sidebar.classList.add('hidden');
+    sidebar.classList.remove('menu-visible');
+    sidebar.hidden = true;
+    sidebar.style.removeProperty('display');
+  }
   const header = document.getElementById('main-header');
   if(header) header.classList.remove('hidden');
   const toggleBtn = document.getElementById('sidebar-toggle-btn');
@@ -3305,8 +3353,6 @@ function renderTable(key){
     </tr>`;
   }).join('');
 }
-
-let isPublicCadastro = false;
 
 async function iniciarCadastroPublico(){
   const params = new URLSearchParams(window.location.search);
