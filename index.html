@@ -37,14 +37,17 @@
   #public-horizontal-nav .nav-btn { color: #1e40af; }
   #public-horizontal-nav .nav-btn:hover:not(.active) { background-color: #dbeafe; color: #1e3a8a; }
   #public-horizontal-nav .nav-btn.active { background-color: #2563eb; color: white; box-shadow: 0 2px 5px rgba(37, 99, 235, .3); }
-  #main-header { position: fixed; top: 0; left: 0; right: 0; min-height: 72px; overflow: visible; }
-  #main-header + div { margin-top: 72px; height: calc(100dvh - 72px); }
+  /* O cabeçalho fica no fluxo normal do flex column do body (flex-shrink:0), em vez de
+     position:fixed. No Chrome/Safari para iOS (motor WebKit) um elemento fixed que é
+     revelado via JS (troca de classes) durante o carregamento da página pode ficar sem
+     repintar e sumir da tela até um scroll/gesto forçar o repaint — por isso o cabeçalho
+     sumia só no iOS. Em fluxo normal esse bug de composição não ocorre em nenhuma plataforma. */
+  #main-header { flex-shrink: 0; min-height: 72px; overflow: visible; }
   #public-horizontal-nav { position: relative; z-index: 60; flex-shrink: 1; max-width: min(100%, 820px); }
   #sidebar-nav.menu-visible { display: block !important; visibility: visible !important; opacity: 1 !important; }
   #public-horizontal-nav.menu-visible { display: flex !important; visibility: visible !important; opacity: 1 !important; }
   @media (max-width: 900px) {
     #main-header { align-items: center; }
-    #main-header + div { margin-top: 126px; height: calc(100dvh - 126px); }
     #public-horizontal-nav { order: 3; flex-basis: 100%; width: 100%; max-width: 100%; justify-content: flex-start; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -56,7 +59,7 @@
   .nav-btn.active .nav-count { background: rgba(255,255,255,.25); }
 </style>
 </head>
-<body class="bg-slate-100 text-slate-800 h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800 h-dvh flex flex-col">
 
   <!-- TELA INICIAL (LANDING PAGE) COM AUTENTICAÇÃO -->
   <div id="welcome-screen" class="fixed inset-0 z-[100] flex flex-col justify-between p-6 md:p-12 overflow-y-auto bg-slate-900 bg-cover bg-center" style="background-image: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.4)), url('fundo.jpg');">
@@ -148,7 +151,7 @@
     </div>
   </header>
 
-  <div class="flex flex-row flex-1 min-h-0 h-[calc(100dvh-65px)] overflow-hidden relative">
+  <div class="flex flex-row flex-1 min-h-0 overflow-hidden relative">
     <aside id="sidebar-nav" class="w-64 bg-white border-r border-slate-200 p-3 md:p-4 overflow-y-auto transition-all duration-300 absolute inset-y-0 left-0 z-40 hidden shadow-xl">
       <nav id="nav" class="flex flex-col gap-1"></nav>
     </aside>
@@ -162,7 +165,7 @@
     <div class="bg-white rounded-xl border border-slate-200 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
       <div class="flex items-center justify-between mb-1">
         <h3 id="modal-title" class="text-lg font-bold text-slate-900">Novo registro</h3>
-        <button onclick="closeModal('modal-form')" class="text-slate-400 hover:text-slate-700">
+        <button type="button" onclick="fecharModalCadastro()" aria-label="Fechar cadastro" class="text-slate-400 hover:text-slate-700">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
@@ -171,7 +174,7 @@
         <div id="modal-fields"></div>
         <div class="flex gap-3 pt-2">
           <button type="submit" id="modal-save-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors shadow-sm">Salvar</button>
-          <button type="button" onclick="closeModal('modal-form')" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Cancelar</button>
+          <button type="button" onclick="fecharModalCadastro()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Cancelar</button>
         </div>
       </form>
       <div id="escala-sem-escala-panel" class="hidden mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"></div>
@@ -235,6 +238,33 @@ let sidebarOpen = false;
 let isPublicView = true;
 let currentUser = null;
 let isPublicCadastro = false;
+
+// Contorna um bug antigo e bem documentado do WebKit (motor por trás de TODO
+// navegador no iOS, inclusive o Chrome): um elemento revelado via JS
+// (classList/display) às vezes fica "preso" sem repintar até o usuário tocar
+// ou rolar a tela. Forçar a leitura de uma propriedade de layout (offsetHeight)
+// logo após um toggle de transform obriga o navegador a recalcular e repintar
+// na hora, em vez de esperar por essa interação do usuário.
+function forceRepaint(el){
+  if(!el) return;
+  el.style.transform = 'translateZ(0)';
+  void el.offsetHeight;
+  el.style.transform = '';
+}
+function forceRepaintShell(){
+  forceRepaint(document.body);
+  forceRepaint(document.getElementById('main-header'));
+  forceRepaint(document.getElementById('sidebar-nav'));
+  forceRepaint(document.getElementById('public-horizontal-nav'));
+  // Reforço no próximo frame: no Chrome/Safari do iOS, logo após remover a tela
+  // de login (que cobria a página inteira em position:fixed) a primeira
+  // repintura forçada às vezes ainda não é suficiente sozinha.
+  requestAnimationFrame(() => {
+    forceRepaint(document.body);
+    forceRepaint(document.getElementById('main-header'));
+  });
+}
+
 function restaurarLayoutAutenticado(){
   // O acesso de Indicador usa isPublicView para limitar o menu, mas ainda é
   // um acesso autenticado e precisa ocultar a tela inicial. Somente o cadastro
@@ -246,8 +276,13 @@ function restaurarLayoutAutenticado(){
   const publicNav = document.getElementById('public-horizontal-nav');
   const toggleBtn = document.getElementById('sidebar-toggle-btn');
   welcome?.classList.add('hidden');
+  if(welcome){ welcome.hidden = true; welcome.style.setProperty('display', 'none', 'important'); }
   header?.classList.remove('hidden');
   mainContent?.classList.remove('hidden');
+  // Reforça a visibilidade com estilo inline importante para impedir que
+  // estados residuais do cadastro público ou do Tailwind ocultem o shell.
+  if(header){ header.hidden = false; header.style.setProperty('display', 'flex', 'important'); }
+  if(mainContent){ mainContent.hidden = false; mainContent.style.setProperty('display', 'flex', 'important'); }
   if(isPublicView){
     // Indicadores usam o menu horizontal no cabeçalho e não o menu lateral.
     publicNav?.classList.remove('hidden');
@@ -262,8 +297,7 @@ function restaurarLayoutAutenticado(){
   }
   // Remove também estados nativos/inline que podem persistir após a transição
   // do fluxo público para o shell autenticado no Chrome iOS/iPadOS.
-  if(header){ header.hidden = false; header.style.removeProperty('display'); }
-  if(mainContent){ mainContent.hidden = false; mainContent.style.removeProperty('display'); }
+  forceRepaintShell();
 }
 
 function mostrarMenuInicial(){
@@ -290,6 +324,7 @@ function mostrarMenuInicial(){
     if(sidebar){ sidebar.hidden = true; sidebar.style.removeProperty('display'); }
     sidebarOpen = false;
   }
+  forceRepaintShell();
 }
 let accessProfile = '';
 let isIndicatorAccess = false;
@@ -333,6 +368,7 @@ function toggleSidebar(e) {
     sidebar.hidden = true;
     sidebar.style.removeProperty('display');
   }
+  forceRepaintShell();
 }
 
 document.addEventListener('click', function(e) {
@@ -946,6 +982,9 @@ function buildLayout(){
   const publicNav = document.getElementById('public-horizontal-nav');
   const toggleBtn = document.getElementById('sidebar-toggle-btn');
   if(!nav || !publicNav) return;
+  // buildLayout pode ocorrer antes ou depois da conclusão das requisições do
+  // login; repetir a restauração elimina a condição de corrida visual.
+  if(!isPublicCadastro) restaurarLayoutAutenticado();
 
   if (isPublicView) {
     if(toggleBtn) toggleBtn.classList.add('hidden');
@@ -4110,6 +4149,19 @@ async function deleteRecord(key, id){
   }catch(err){
     showToast(err.message);
   }
+}
+
+function fecharModalCadastro(){
+  if(!isPublicCadastro){
+    closeModal('modal-form');
+    return;
+  }
+
+  // O cadastro aberto pelo QRCode é uma rota pública independente. Fechar o
+  // modal não deve deixar a página sem conteúdo nem manter a query string que
+  // reabre o cadastro automaticamente.
+  const loginUrl = `${window.location.origin}${window.location.pathname}`;
+  window.location.replace(loginUrl);
 }
 
 function openModal(id){ document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
