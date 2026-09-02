@@ -883,14 +883,62 @@ async function entrarComoIndicador(){ return autenticarUsuarioSistema(); }
 async function entrarComoAdministrador(){ return autenticarUsuarioSistema(); }
 function voltarParaTelaInicial() {
   const welcomeScreen = document.getElementById('welcome-screen');
+  const header = document.getElementById('main-header');
+  const mainContent = document.getElementById('main-content');
+  const sidebar = document.getElementById('sidebar-nav');
+  const publicNav = document.getElementById('public-horizontal-nav');
   const passwordInput = document.getElementById('welcome-password');
   const passwordError = document.getElementById('password-error-msg');
+
+  // Encerra o estado autenticado antes de exibir novamente a tela de login.
+  currentUser = null;
+  accessProfile = '';
+  isIndicatorAccess = false;
+  isPublicView = true;
+  sidebarOpen = false;
+  current = 'home';
+
+  // Fecha elementos que possam ter permanecido abertos durante a sessão.
+  document.querySelectorAll('.fixed[role="dialog"]').forEach(dialog => {
+    dialog.classList.add('hidden');
+    dialog.classList.remove('flex');
+  });
+  document.getElementById('modal-form')?.classList.add('hidden');
+  document.getElementById('modal-form')?.classList.remove('flex');
+  document.getElementById('modal-report-filter')?.classList.add('hidden');
+  document.getElementById('modal-report-filter')?.classList.remove('flex');
+
   if(passwordInput) {
     passwordInput.value = '';
     passwordInput.classList.remove('field-error');
   }
   if(passwordError) passwordError.classList.add('hidden');
-  if(welcomeScreen) welcomeScreen.classList.remove('hidden');
+
+  // A entrada no sistema aplica display:none!important na tela inicial.
+  // Remover somente a classe hidden não é suficiente para fazê-la reaparecer.
+  if(welcomeScreen){
+    welcomeScreen.classList.remove('hidden');
+    welcomeScreen.hidden = false;
+    welcomeScreen.style.removeProperty('display');
+  }
+
+  // Oculta novamente o shell autenticado e limpa os estados inline aplicados
+  // durante a autenticação, evitando sobreposição da tela de login.
+  [header, mainContent].forEach(element => {
+    if(!element) return;
+    element.classList.add('hidden');
+    element.hidden = true;
+    element.style.setProperty('display', 'none', 'important');
+  });
+  sidebar?.classList.add('hidden');
+  sidebar?.classList.remove('menu-visible');
+  if(sidebar){ sidebar.hidden = true; sidebar.style.removeProperty('display'); }
+  publicNav?.classList.add('hidden');
+  publicNav?.classList.remove('flex', 'menu-visible');
+  if(publicNav){ publicNav.hidden = true; publicNav.style.removeProperty('display'); }
+
+  updateHeaderEventoName();
+  forceRepaintShell();
   loadDBForLogin();
 }
 
