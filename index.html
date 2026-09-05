@@ -1014,6 +1014,69 @@ function changeRelatorioPeriodo(val){ relatorioPeriodoFilter = val; renderRelato
 function changeContagemDate(val){ contagemDataFilter = val; renderTable('contagem'); }
 function changeContagemPeriodo(val){ contagemPeriodoFilter = val; renderTable('contagem'); }
 
+function abrirNovaContagem(){
+  try {
+    // O botão pode permanecer na tela depois de uma atualização assíncrona da
+    // aba. Reforça o contexto antes de abrir o formulário, evitando que um DOM
+    // antigo ou um estado de outra aba impeça o segundo lançamento.
+    current = 'contagem';
+    if(!document.getElementById('tab-contagem')) buildLayout();
+
+    const modal = document.getElementById('modal-form');
+    const form = document.getElementById('entity-form');
+    if(!modal || !form) throw new Error('O formulário de contagem não está disponível.');
+
+    // Garante que uma instância anterior do modal não permaneça em estado
+    // intermediário após o salvamento ou fechamento da primeira contagem.
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    modalState = { key: null, editingId: null };
+
+    restaurarFiltrosContagem();
+    openEntityModal('contagem');
+  } catch(err) {
+    console.error('Erro ao abrir nova contagem:', err);
+    showToast(`Não foi possível abrir Nova Contagem: ${err.message}`);
+  }
+}
+
+function restaurarFiltrosContagem(){
+  const dateEl = document.getElementById('contagem-date-filter');
+  const periodoEl = document.getElementById('contagem-periodo-filter');
+
+  // buildLayout recria os controles da aba. A lista de datas precisa ser
+  // preenchida novamente antes de atribuir o valor salvo no estado da tela.
+  if(dateEl){
+    const evento = (db['evento'] || []).find(e => Number(e.codevento) === Number(globalEventoId));
+    const inicio = dateOnly(evento?.data_inicio);
+    const fim = dateOnly(evento?.data_final);
+    let options = '<option value="ALL">Todas as Datas</option>';
+
+    if(inicio && fim){
+      const cursor = new Date(`${inicio}T00:00:00`);
+      const limite = new Date(`${fim}T00:00:00`);
+      while(cursor <= limite){
+        const valor = `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`;
+        options += `<option value="${valor}">${formatDateBR(valor)}</option>`;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    dateEl.innerHTML = options;
+    dateEl.value = [...dateEl.options].some(option => option.value === contagemDataFilter)
+      ? contagemDataFilter
+      : 'ALL';
+    if(dateEl.value !== contagemDataFilter) contagemDataFilter = 'ALL';
+  }
+
+  if(periodoEl){
+    periodoEl.value = [...periodoEl.options].some(option => String(option.value) === String(contagemPeriodoFilter))
+      ? contagemPeriodoFilter
+      : 'ALL';
+    if(String(periodoEl.value) !== String(contagemPeriodoFilter)) contagemPeriodoFilter = 'ALL';
+  }
+}
+
 function changeDesignacaoDate(val){ designacaoDataFilter = val; renderDesignacoes(); }
 function changeDesignacaoPeriodo(val){ designacaoPeriodoFilter = val; renderDesignacoes(); }
 
@@ -1373,7 +1436,7 @@ function buildLayout(){
                   </select>
                 </div>
 
-                ${(!isPublicView || e.key === 'contagem') ? `<button onclick="openEntityModal('${e.key}')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                ${(!isPublicView || e.key === 'contagem') ? `<button type="button" onclick="abrirNovaContagem()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                   Novo ${e.label}
                 </button>` : ''}
@@ -1532,6 +1595,10 @@ function buildLayout(){
       </div>
     `;
   }
+
+  // Os selects da aba Contagens foram recriados acima. Repreenche as datas do
+  // evento e restaura os valores mantidos em memória antes da renderização.
+  restaurarFiltrosContagem();
 
     renderCurrentTab();
   updateCounts();
@@ -3648,7 +3715,7 @@ function openEntityModal(key, id){
         const dataContagemEl = document.querySelector('#modal-form [data-field="data"]');
         if (dataContagemEl && dataContagemEl.value) {
           const selData = dateOnly(dataContagemEl.value);
-          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && dateOnly(p.datacont) === selData && (p.ativo === true || p.ativo === 'true' || Number(p.ativo) === 1));
+          const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == globalEventoId) && p.datacont && dateOnly(p.datacont) === selData && (p.ativo === true || p.ativo === 'true' || Number(p.ativo) === 1));
           const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
           refList = refList.filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => dateOnly(es.data) === selData && Number(es.codperiodo) === Number(per.codperiodo))));
         } else {
@@ -4171,8 +4238,17 @@ document.getElementById('entity-form').addEventListener('submit', async function
       window.location.href = window.location.origin + window.location.pathname;
       return;
     }
-    buildLayout();
     closeModal('modal-form');
+    if(key === 'contagem'){
+      // Não reconstruir toda a aba após salvar uma contagem. A reconstrução
+      // substituía os selects e podia deixar o botão "Nova Contagem" sem o
+      // estado visual/eventual esperado. Como o registro já foi incluído em
+      // db.contagem, basta renderizar a tabela mantendo os filtros atuais.
+      renderTable('contagem');
+      updateCounts();
+    } else {
+      buildLayout();
+    }
   }catch(err){
     let msg = err.message || '';
     if (msg.includes('uk_contagem_evento_data_periodo_setor') || msg.includes('duplicate key value')) {
