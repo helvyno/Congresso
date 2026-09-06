@@ -1086,6 +1086,40 @@ function changeParametroPeriodo(val){ parametroPeriodoFilter = val; renderTable(
 function changeEscalaDate(val){ escalaDataFilter = val; renderTable('escalas'); }
 function changeEscalaPeriodo(val){ escalaPeriodoFilter = val; renderTable('escalas'); }
 
+function restaurarFiltrosEscalas(){
+  const dateEl = document.getElementById('escala-date-filter');
+  const periodoEl = document.getElementById('escala-periodo-filter');
+  if(dateEl){
+    const evento = (db['evento'] || []).find(e => Number(e.codevento) === Number(globalEventoId));
+    const inicio = dateOnly(evento?.data_inicio);
+    const fim = dateOnly(evento?.data_final);
+    let options = '<option value="ALL">Todas as Datas</option>';
+
+    if(inicio && fim){
+      const cursor = new Date(`${inicio}T00:00:00`);
+      const limite = new Date(`${fim}T00:00:00`);
+      while(cursor <= limite){
+        const valor = `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`;
+        options += `<option value="${valor}">${formatDateBR(valor)}</option>`;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    dateEl.innerHTML = options;
+    dateEl.value = [...dateEl.options].some(option => option.value === escalaDataFilter)
+      ? escalaDataFilter
+      : 'ALL';
+    if(dateEl.value !== escalaDataFilter) escalaDataFilter = 'ALL';
+  }
+
+  if(periodoEl){
+    periodoEl.value = [...periodoEl.options].some(option => String(option.value) === String(escalaPeriodoFilter))
+      ? escalaPeriodoFilter
+      : 'ALL';
+    if(String(periodoEl.value) !== String(escalaPeriodoFilter)) escalaPeriodoFilter = 'ALL';
+  }
+}
+
 function changePresencaDate(val){ presencaDateFilter = val; renderPresenca(); }
 
 function buildLayout(){
@@ -1599,6 +1633,7 @@ function buildLayout(){
   // Os selects da aba Contagens foram recriados acima. Repreenche as datas do
   // evento e restaura os valores mantidos em memória antes da renderização.
   restaurarFiltrosContagem();
+  restaurarFiltrosEscalas();
 
     renderCurrentTab();
   updateCounts();
