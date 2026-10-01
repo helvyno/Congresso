@@ -283,10 +283,13 @@ tables.forEach(table => {
   app.post(`/api/${table}`, async (req, res) => {
     try {
       const data = { ...req.body };
+      if (table === 'evento' && data.ativo === undefined) data.ativo = true;
     if (table === 'pessoa') {
       data.usuario = String(data.usuario || '').trim().toUpperCase();
+      data.codevento = Number(data.codevento);
       if (!data.usuario) return res.status(400).json({ error: 'O usuário é obrigatório.' });
-      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 LIMIT 1', [data.usuario]);
+      if (!Number.isInteger(data.codevento) || data.codevento <= 0) return res.status(400).json({ error: 'O evento da pessoa é obrigatório.' });
+      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE codevento = $1 AND UPPER(TRIM(usuario)) = $2 LIMIT 1', [data.codevento, data.usuario]);
       if (duplicate.rows.length) return res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
     }
     const keys = Object.keys(data);
@@ -296,10 +299,14 @@ tables.forEach(table => {
       const { rows } = await pool.query(query, values);
       res.status(201).json(rows[0]);
     } catch (err) {
-      if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
-        res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
-      } else if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
+      if (table === 'pessoa' && err.code === '23505' && err.constraint === 'ux_pessoa_usuario_normalizado') {
+        res.status(409).json({ error: 'O banco ainda usa a unicidade global do usuário. Execute a migração do índice para incluir codevento.' });
+      } else if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
+        res.status(409).json({ error: 'Usuário já existe neste evento, informe um usuário diferente' });
+      } else if (err.constraint === 'uk_contagem_evento_data_periodo_setor') {
         res.status(400).json({ error: 'Já existe uma contagem registrada para este setor nesta data e período.' });
+      } else if (err.code === '23505') {
+        res.status(409).json({ error: 'Já existe um registro com os mesmos dados neste evento.' });
       } else {
         res.status(500).json({ error: err.message });
       }
@@ -310,10 +317,13 @@ tables.forEach(table => {
     try {
       const id = req.params.id;
       const data = { ...req.body };
+      if (table === 'evento' && data.ativo === undefined) data.ativo = true;
     if (table === 'pessoa') {
       data.usuario = String(data.usuario || '').trim().toUpperCase();
+      data.codevento = Number(data.codevento);
       if (!data.usuario) return res.status(400).json({ error: 'O usuário é obrigatório.' });
-      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE UPPER(TRIM(usuario)) = $1 AND codpessoa <> $2 LIMIT 1', [data.usuario, id]);
+      if (!Number.isInteger(data.codevento) || data.codevento <= 0) return res.status(400).json({ error: 'O evento da pessoa é obrigatório.' });
+      const duplicate = await pool.query('SELECT codpessoa FROM pessoa WHERE codevento = $1 AND UPPER(TRIM(usuario)) = $2 AND codpessoa <> $3 LIMIT 1', [data.codevento, data.usuario, id]);
       if (duplicate.rows.length) return res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
     }
     const keys = Object.keys(data);
@@ -323,10 +333,14 @@ tables.forEach(table => {
       const { rows } = await pool.query(query, [...values, id]);
       res.json(rows[0]);
     } catch (err) {
-      if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
-        res.status(409).json({ error: 'Usuário já existe, informe um usuário diferente' });
-      } else if (err.message.includes('uk_contagem_evento_data_periodo_setor') || err.message.includes('duplicate key')) {
+      if (table === 'pessoa' && err.code === '23505' && err.constraint === 'ux_pessoa_usuario_normalizado') {
+        res.status(409).json({ error: 'O banco ainda usa a unicidade global do usuário. Execute a migração do índice para incluir codevento.' });
+      } else if (table === 'pessoa' && (err.code === '23505' || err.message.includes('usuario'))) {
+        res.status(409).json({ error: 'Usuário já existe neste evento, informe um usuário diferente' });
+      } else if (err.constraint === 'uk_contagem_evento_data_periodo_setor') {
         res.status(400).json({ error: 'Já existe uma contagem registrada para este setor nesta data e período.' });
+      } else if (err.code === '23505') {
+        res.status(409).json({ error: 'Já existe um registro com os mesmos dados neste evento.' });
       } else {
         res.status(500).json({ error: err.message });
       }

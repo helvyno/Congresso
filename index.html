@@ -88,6 +88,10 @@
         <p class="text-xs text-slate-300 mb-6">Selecione o evento desejado para prosseguir:</p>
         
         <div class="space-y-4">
+          <label class="flex items-center gap-2 text-sm text-slate-200 cursor-pointer select-none">
+            <input type="checkbox" id="welcome-ativos-checkbox" checked onchange="onWelcomeAtivosChange(this.checked)" class="w-4 h-4 accent-blue-500 rounded cursor-pointer">
+            <span>Ativos</span>
+          </label>
           <div>
             <select id="welcome-evento-select" onchange="onWelcomeEventoChange(this.value)" class="w-full bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
               <option value="">Selecione o evento...</option>
@@ -443,7 +447,8 @@ const ENTITIES = [
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Congresso Regional 2026'},
     {name:'data_inicio', label:'Data início', type:'date', required:true},
     {name:'data_final', label:'Data final', type:'date', required:true},
-    {name:'senha', label:'Senha do Evento (Admin)', type:'text', required:false, placeholder:'Senha de acesso administrativo'}
+    {name:'senha', label:'Senha do Evento (Admin)', type:'text', required:false, placeholder:'Senha de acesso administrativo'},
+    {name:'ativo', label:'Ativo', type:'boolean', required:false}
   ]},
   { key:'setor', label:'Setor', plural:'Setores', pk:'codsetor', isCustomSetor:true, display:r=>r.descricao, fields:[
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Portaria Principal'},
@@ -504,6 +509,7 @@ const ENTITIES = [
 
 let db = {};
 let current = 'home';
+let welcomeShowActive = true;
 let disponibilidadeSearch = '';
 let globalEventoId = null;
 let escalaSugestoes = [];
@@ -534,6 +540,32 @@ function formatDateBR(dateStr) {
 }
 
 function entity(key){ return ENTITIES.find(e=>e.key===key); }
+function isEventActive(evento){
+  return evento?.ativo === true || evento?.ativo === 'true' || evento?.ativo === 1 || evento?.ativo === '1' || evento?.ativo === undefined || evento?.ativo === null;
+}
+function eventosVisiveisNoLogin(){
+  const eventos = Array.isArray(db.evento) ? db.evento : [];
+  return eventos.filter(evento => welcomeShowActive ? isEventActive(evento) : !isEventActive(evento));
+}
+function renderWelcomeEventos(preferredId = null){
+  const selectWelcome = document.getElementById('welcome-evento-select');
+  if(!selectWelcome) return;
+  const eventos = eventosVisiveisNoLogin();
+  const preferred = preferredId !== null && preferredId !== undefined ? String(preferredId) : '';
+  if(eventos.length === 0){
+    selectWelcome.innerHTML = `<option value="" disabled selected>${welcomeShowActive ? 'Nenhum evento ativo encontrado' : 'Nenhum evento inativo encontrado'}</option>`;
+    onWelcomeEventoChange('');
+    return;
+  }
+  const selected = eventos.some(ev => String(ev.codevento) === preferred) ? preferred : (eventos.length === 1 ? String(eventos[0].codevento) : '');
+  selectWelcome.innerHTML = `<option value="" disabled ${selected ? '' : 'selected'}>Selecione o evento...</option>` + eventos.map(ev => `<option value="${ev.codevento}" ${String(ev.codevento) === selected ? 'selected' : ''}>${escapeHtml(ev.descricao)}</option>`).join('');
+  onWelcomeEventoChange(selected);
+}
+function onWelcomeAtivosChange(checked){
+  welcomeShowActive = !!checked;
+  const currentValue = document.getElementById('welcome-evento-select')?.value || null;
+  renderWelcomeEventos(currentValue);
+}
 function findRecord(key,id){
   if (id === null || id === undefined || id === '') return undefined;
   const target = String(id);
@@ -624,18 +656,13 @@ async function checkDbStatus(){
 
 async function loadDBForLogin(){
   const selectWelcome = document.getElementById('welcome-evento-select');
+  const ativosCheckbox = document.getElementById('welcome-ativos-checkbox');
+  welcomeShowActive = ativosCheckbox ? ativosCheckbox.checked : true;
   if(selectWelcome) selectWelcome.innerHTML = '<option value="" disabled selected>Carregando eventos…</option>';
   try {
     const eventos = await apiList('evento');
     db['evento'] = Array.isArray(eventos) ? eventos : [];
-    if(selectWelcome){
-      if(db.evento.length === 1){
-        const unicoEvento = db.evento[0];
-        selectWelcome.innerHTML = `<option value="${unicoEvento.codevento}" selected>${escapeHtml(unicoEvento.descricao)}</option>`;
-      } else {
-        selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + db.evento.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
-      }
-    }
+    renderWelcomeEventos();
   } catch(err) {
     console.error('Erro ao carregar eventos para login:', err);
     if(selectWelcome) selectWelcome.innerHTML = '<option value="" disabled selected>Não foi possível carregar os eventos</option>';
@@ -645,6 +672,7 @@ async function loadDBForLogin(){
     onWelcomeEventoChange(selectWelcome?.value || '');
   }
 }
+
 function onWelcomeEventoChange(val){
   const btnIndicador = document.getElementById('btn-entrar-indicador');
   const passwordError = document.getElementById('password-error-msg');
@@ -742,17 +770,16 @@ function initGlobalEvento(){
   
   if(!selectHeader) return;
 
-  const optionsHtml = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}</option>`).join('');
-  if(selectWelcome) selectWelcome.innerHTML = '<option value="" disabled selected>Selecione o evento...</option>' + optionsHtml;
-  selectHeader.innerHTML = optionsHtml;
+  const optionsHtml = eventos.map(ev => `<option value="${ev.codevento}">${escapeHtml(ev.descricao)}${isEventActive(ev) ? '' : ' (Inativo)'}</option>`).join('');
+  selectHeader.innerHTML = optionsHtml || '<option value="">Nenhum evento cadastrado</option>';
 
   if(!globalEventoId && eventos.length > 0){
-    globalEventoId = eventos[0].codevento;
+    const primeiroAtivo = eventos.find(isEventActive);
+    globalEventoId = (primeiroAtivo || eventos[0]).codevento;
   }
   selectHeader.value = globalEventoId;
-  if(selectWelcome && globalEventoId) selectWelcome.value = globalEventoId;
+  renderWelcomeEventos(globalEventoId);
   updateHeaderEventoName();
-  onWelcomeEventoChange(globalEventoId);
   updateDashboardDateOptions();
 }
 
@@ -2585,18 +2612,34 @@ function gerarPdfistencia(){
       paramsDoDia.forEach((param, pIdx) => {
         const horaCont = param.horacont ? param.horacont.substring(0, 5) : '--:--';
         const contsDoParam = contagens.filter(c => c.data && c.data.split('T')[0] === dia && String(c.codperiodo) === String(param.codperiodo));
-        const somaAssistencia = contsDoParam.reduce((acc, curr) => acc + Number(curr.quantidade || 0), 0);
+        const somaPresencial = contsDoParam.reduce((acc, curr) => {
+          const setorNome = normalizeSearchText(refRelationDescricao('setor', curr.codsetor)).trim();
+          return setorNome === 'stream' ? acc : acc + Number(curr.quantidade || 0);
+        }, 0);
+        const somaStream = contsDoParam.reduce((acc, curr) => {
+          const setorNome = normalizeSearchText(refRelationDescricao('setor', curr.codsetor)).trim();
+          return setorNome === 'stream' ? acc + Number(curr.quantidade || 0) : acc;
+        }, 0);
+        const somaTotal = somaPresencial + somaStream;
 
         bodyRows.push([
           { text: pIdx === 0 ? diaLabel : '', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
           { text: horaCont, alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f8fafc', margin: [0, 10, 0, 10] },
-          { text: somaAssistencia > 0 ? String(somaAssistencia) : '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
+          { text: somaPresencial > 0 ? String(somaPresencial) : '', alignment: 'center', bold: true, fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] },
+          { text: somaStream > 0 ? String(somaStream) : '', alignment: 'center', bold: true, fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
+        ]);
+        bodyRows.push([
+          { text: '', border: [true, false, false, true], margin: [0, 0, 0, 0] },
+          { text: '', border: [false, false, true, true], margin: [0, 0, 0, 0] },
+          { text: somaTotal > 0 ? String(somaTotal) : '', colSpan: 2, alignment: 'center', bold: true, fontSize: 11, border: [true, true, true, true], margin: [0, 5, 0, 5] },
+          {}
         ]);
       });
     } else {
       bodyRows.push([
         { text: diaLabel, bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
         { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f8fafc', margin: [0, 10, 0, 10] },
+        { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] },
         { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
       ]);
     }
@@ -2606,6 +2649,7 @@ function gerarPdfistencia(){
     bodyRows.push([
       { text: 'PRIMEIRO DIA', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 15, 0, 15] },
       { text: '--:--', alignment: 'center', fontSize: 11, border: [true, true, true, true], fillColor: '#f8fafc', margin: [0, 10, 0, 10] },
+      { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] },
       { text: '', alignment: 'center', fontSize: 11, border: [true, true, true, true], margin: [0, 15, 0, 15] }
     ]);
   }
@@ -2617,16 +2661,22 @@ function gerarPdfistencia(){
       { text: 'ATENÇÃO: Tenha pronto, sem falta, o total de cada sessão logo após a hora indicada abaixo, para que um representante do Departamento de Indicadores possa recolhê-lo.', fontSize: 9, bold: true, margin: [0, 0, 0, 20] },
       {
         table: {
-          widths: ['30%', '40%', '30%'],
+          widths: ['30%', '40%', '15%', '15%'],
           body: [
             [
-              { text: 'DIA', bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 0, 0, 8] },
-              { text: 'HORA DA CONTAGEM', bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 8] },
-              { text: 'ASSISTÊNCIA', bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 8] }
+              { text: 'DIA', rowSpan: 2, bold: true, fontSize: 10, border: [true, true, true, true], margin: [0, 0, 0, 8] },
+              { text: 'HORA DA CONTAGEM', rowSpan: 2, bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 8] },
+              { text: 'ASSISTÊNCIA', colSpan: 2, bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 8] },
+              {}
             ],
             [
-              { text: '(USE APENAS OS DIAS QUE SE APLICAM.)', colSpan: 3, alignment: 'center', fontSize: 9, color: '#64748b', border: [true, true, true, true], margin: [0, 5, 0, 15] },
-              {}, {}
+              {}, {},
+              { text: 'Presencial', bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 5] },
+              { text: 'Stream', bold: true, fontSize: 10, alignment: 'center', border: [true, true, true, true], margin: [0, 0, 0, 5] }
+            ],
+            [
+              { text: '(USE APENAS OS DIAS QUE SE APLICAM.)', colSpan: 4, alignment: 'center', fontSize: 9, color: '#64748b', border: [true, true, true, true], margin: [0, 5, 0, 15] },
+              {}, {}, {}
             ],
             ...bodyRows
           ]
@@ -3520,7 +3570,7 @@ function renderTable(key){
       }
       let val = r[f.name];
       if(f.type==='date') val = formatDateBR(val);
-      if(f.name==='ativo') val = (val===true || val==='true') ? 'SIM' : 'NÃO';
+      if(f.name==='ativo') val = isEventActive({ativo: val}) ? 'SIM' : 'NÃO';
       return `<td class="px-6 py-4 text-slate-700">${val!==undefined && val!==null && val!=='' ? escapeHtml(String(val)) : '—'}</td>`;
     }).join('');
     
@@ -3678,11 +3728,12 @@ function openEntityModal(key, id){
 
       dispHtml += `</div>`;
       control = dispHtml;
-    } else if(f.name === 'ativo' && key === 'parametros'){
-      const isChecked = record ? (record.ativo === true || record.ativo === 'true') : true;
+    } else if(f.name === 'ativo' && (key === 'parametros' || key === 'evento')){
+      const isChecked = record ? isEventActive(record) : true;
+      const activeLabel = key === 'evento' ? 'Evento disponível para acesso' : 'Liberado para contagens neste dia';
       control = `<div class="flex items-center gap-3 pt-1">
         <input type="checkbox" data-field="${f.name}" ${isChecked ? 'checked' : ''} class="w-5 h-5 accent-blue-600 rounded cursor-pointer">
-        <span class="text-sm text-slate-700">Liberado para contagens neste dia</span>
+        <span class="text-sm text-slate-700">${activeLabel}</span>
       </div>`;
     } else if(f.type === 'search_fk'){
       let refList = db[f.ref] || [];
@@ -4088,7 +4139,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
     visualInputForError.classList.remove('field-error'); err.classList.add('hidden');
     let raw;
 
-    if(f.name === 'ativo' && key === 'parametros'){
+    if(f.name === 'ativo' && (key === 'parametros' || key === 'evento')){
       raw = el.checked;
     } else {
       raw = el.value;
@@ -4132,7 +4183,7 @@ document.getElementById('entity-form').addEventListener('submit', async function
       }
     }
 
-    if(f.name === 'ativo' && key === 'parametros'){
+    if(f.name === 'ativo' && (key === 'parametros' || key === 'evento')){
       values[f.name] = raw;
     } else if(f.type==='fk' || f.type==='search_fk'){
       values[f.name] = raw ? Number(raw) : null;
@@ -4167,7 +4218,8 @@ document.getElementById('entity-form').addEventListener('submit', async function
   }
 
   if (key === 'pessoa' && values.usuario) {
-    const usuarioDuplicado = (db['pessoa'] || []).some(p => String(p.usuario || '').trim().toUpperCase() === String(values.usuario).trim().toUpperCase() && (!editingId || Number(p.codpessoa) !== Number(editingId)));
+    const pessoaEvento = Number(values.codevento || globalEventoId);
+    const usuarioDuplicado = (db['pessoa'] || []).some(p => Number(p.codevento) === pessoaEvento && String(p.usuario || '').trim().toUpperCase() === String(values.usuario).trim().toUpperCase() && (!editingId || Number(p.codpessoa) !== Number(editingId)));
     if(usuarioDuplicado){
       const wrap = form.querySelector('[data-field-wrap="usuario"]');
       const input = wrap?.querySelector('[data-field="usuario"]');
@@ -4179,7 +4231,8 @@ document.getElementById('entity-form').addEventListener('submit', async function
   }
 
   if (key === 'pessoa' && values.telefone) {
-    const telefoneDuplicado = (db['pessoa'] || []).some(p => p.telefone === values.telefone && (!editingId || p.codpessoa !== Number(editingId)));
+    const pessoaEvento = Number(values.codevento || globalEventoId);
+    const telefoneDuplicado = (db['pessoa'] || []).some(p => Number(p.codevento) === pessoaEvento && p.telefone === values.telefone && (!editingId || p.codpessoa !== Number(editingId)));
     if (telefoneDuplicado) {
       const phoneWrap = form.querySelector('[data-field-wrap="telefone"]');
       if (phoneWrap) {
