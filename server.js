@@ -186,7 +186,7 @@ app.post('/api/escalas/automaticas', async (req, res) => {
     if (!dateCheck.rows[0]?.dentro_periodo) {
       throw new Error('A data informada está fora do período do evento.');
     }
-    const period = await client.query('SELECT horario_inicial, horario_final, descricao FROM periodo WHERE codperiodo = $1', [codperiodo]);
+    const period = await client.query('SELECT horario_inicial, horario_final, descricao FROM periodo WHERE codperiodo = $1 AND codevento = $2', [codperiodo, codevento]);
     if (!period.rows.length) throw new Error('Período não encontrado.');
     const periodo = period.rows[0];
     const setores = await client.query('SELECT codsetor, descricao FROM setor WHERE codevento = $1 ORDER BY codsetor ASC', [codevento]);
@@ -240,7 +240,7 @@ app.post('/api/escalas/aprovar-sugestoes', async (req, res) => {
       if(exists.rows.length) continue;
       const valid=await client.query(`SELECT 1 FROM pessoa p JOIN perfil pf ON pf.codperfil=p.codperfil WHERE p.codpessoa=$1 AND p.codevento=$2 AND UPPER(pf.descricao)='INDICADOR'`,[pessoa,codevento]);
       if(!valid.rows.length) throw new Error('A sugestão contém uma pessoa que não é Indicador do evento.');
-      const periodo=await client.query('SELECT horario_inicial,horario_final FROM periodo WHERE codperiodo=$1',[per]);
+      const periodo=await client.query('SELECT horario_inicial,horario_final FROM periodo WHERE codperiodo=$1 AND codevento=$2',[per,codevento]);
       if(!periodo.rows.length) throw new Error('Período da sugestão não encontrado.');
       await client.query('INSERT INTO escalas (codevento,data,codperiodo,codpessoa,codsetor,hora_inicio,hora_fim) VALUES ($1,$2,$3,$4,$5,$6,$7)',[codevento,data,per,pessoa,setor,periodo.rows[0].horario_inicial||null,periodo.rows[0].horario_final||null]); inseridas++;
     }
@@ -273,6 +273,12 @@ tables.forEach(table => {
 
   app.get(`/api/${table}`, async (req, res) => {
     try {
+      if (table === 'periodo' && req.query.codevento !== undefined) {
+        const codevento = Number(req.query.codevento);
+        if (!Number.isInteger(codevento) || codevento <= 0) return res.status(400).json({ error: 'Informe um evento válido para carregar os períodos.' });
+        const { rows } = await pool.query('SELECT * FROM periodo WHERE codevento = $1 ORDER BY codperiodo ASC', [codevento]);
+        return res.json(rows);
+      }
       const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY ${pk} ASC`);
       res.json(rows);
     } catch (err) {
@@ -284,6 +290,10 @@ tables.forEach(table => {
     try {
       const data = { ...req.body };
       if (table === 'evento' && data.ativo === undefined) data.ativo = true;
+      if (table === 'periodo') {
+        data.codevento = Number(data.codevento);
+        if (!Number.isInteger(data.codevento) || data.codevento <= 0) return res.status(400).json({ error: 'O evento do período é obrigatório.' });
+      }
     if (table === 'pessoa') {
       data.usuario = String(data.usuario || '').trim().toUpperCase();
       data.codevento = Number(data.codevento);
@@ -318,6 +328,10 @@ tables.forEach(table => {
       const id = req.params.id;
       const data = { ...req.body };
       if (table === 'evento' && data.ativo === undefined) data.ativo = true;
+      if (table === 'periodo') {
+        data.codevento = Number(data.codevento);
+        if (!Number.isInteger(data.codevento) || data.codevento <= 0) return res.status(400).json({ error: 'O evento do período é obrigatório.' });
+      }
     if (table === 'pessoa') {
       data.usuario = String(data.usuario || '').trim().toUpperCase();
       data.codevento = Number(data.codevento);
@@ -441,12 +455,13 @@ app.delete('/api/usuario/:id', async (req, res) => {
 const EVENT_REPLICATION_DEFINITIONS = {
   setor: { pk: 'codsetor', columns: ['descricao', 'numass', 'codevento'], dependencies: [] },
   congregacao: { pk: 'codcong', columns: ['nome_congregacao', 'codevento'], dependencies: [] },
-  parametros: { pk: 'codparametro', columns: ['codevento', 'datacont', 'horacont', 'codperiodo', 'ativo'], dependencies: [] },
+  periodo: { pk: 'codperiodo', columns: ['descricao', 'horario_inicial', 'horario_final', 'codevento'], dependencies: [] },
+  parametros: { pk: 'codparametro', columns: ['codevento', 'datacont', 'horacont', 'codperiodo', 'ativo'], dependencies: ['periodo'] },
   pessoa: { pk: 'codpessoa', columns: ['nomecompleto', 'telefone', 'usuario', 'codprivilegio', 'codperfil', 'codevento', 'codcong'], dependencies: ['congregacao'] },
-  escalas: { pk: 'codescala', columns: ['codevento', 'data', 'codperiodo', 'codpessoa', 'codsetor', 'hora_inicio', 'hora_fim'], dependencies: ['pessoa', 'setor'] },
-  contagem: { pk: 'codcont', columns: ['codevento', 'data', 'codperiodo', 'codsetor', 'codpessoa', 'quantidade'], dependencies: ['pessoa', 'setor'] },
+  escalas: { pk: 'codescala', columns: ['codevento', 'data', 'codperiodo', 'codpessoa', 'codsetor', 'hora_inicio', 'hora_fim'], dependencies: ['periodo', 'pessoa', 'setor'] },
+  contagem: { pk: 'codcont', columns: ['codevento', 'data', 'codperiodo', 'codsetor', 'codpessoa', 'quantidade'], dependencies: ['periodo', 'pessoa', 'setor'] },
   listapresenca: { pk: 'codpresenca', columns: ['codpessoa', 'codevento', 'data', 'presente'], dependencies: ['pessoa'] },
-  pessoadisponibilidade: { pk: null, columns: ['codpessoa', 'codevento', 'data', 'codperiodo'], dependencies: ['pessoa'] },
+  pessoadisponibilidade: { pk: null, columns: ['codpessoa', 'codevento', 'data', 'codperiodo'], dependencies: ['periodo', 'pessoa'] },
   configmapa: { pk: null, columns: ['codevento', 'imagem_base64'], dependencies: [] },
   relatorios_bi: { pk: 'id', columns: ['codevento', 'nome', 'descricao', 'sql_consulta', 'ativo'], dependencies: [] }
 };
@@ -486,7 +501,7 @@ app.post('/api/evento/replicar', async (req, res) => {
     }
     const requestedTables = validarTabelasReplicacao(selectedTables);
     if (!requestedTables.length) return res.status(400).json({ error: 'Selecione ao menos uma tabela para replicar.' });
-    const replicationOrder = ['congregacao', 'setor', 'parametros', 'pessoa', 'escalas', 'contagem', 'listapresenca', 'pessoadisponibilidade', 'configmapa', 'relatorios_bi'];
+    const replicationOrder = ['congregacao', 'setor', 'periodo', 'parametros', 'pessoa', 'escalas', 'contagem', 'listapresenca', 'pessoadisponibilidade', 'configmapa', 'relatorios_bi'];
     tablesToCopy = replicationOrder.filter(table => requestedTables.includes(table));
 
     const client = await pool.connect();
@@ -513,6 +528,7 @@ app.post('/api/evento/replicar', async (req, res) => {
             if (column === 'codcong' && mappings.congregacao) return mappings.congregacao.get(String(sourceRow[column])) || null;
             if (column === 'codsetor' && mappings.setor) return mappings.setor.get(String(sourceRow[column])) || null;
             if (column === 'codpessoa' && mappings.pessoa) return mappings.pessoa.get(String(sourceRow[column])) || null;
+            if (column === 'codperiodo' && mappings.periodo) return mappings.periodo.get(String(sourceRow[column])) || null;
             return sourceRow[column];
           });
           const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');

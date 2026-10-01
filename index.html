@@ -462,10 +462,11 @@ const ENTITIES = [
   { key:'privilegio', label:'Privilégio', plural:'Privilégios', pk:'codprivilegio', display:r=>r.descricao, isGlobal:true, fields:[ 
     {name:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex.: Coordenador de setor'} 
   ]},
-  { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>`${r.descricao} (${r.horario_inicial||'--:--'} às ${r.horario_final||'--:--'})`, isGlobal:true, fields:[
+  { key:'periodo', label:'Período', plural:'Períodos', pk:'codperiodo', display:r=>`${r.descricao} (${r.horario_inicial||'--:--'} às ${r.horario_final||'--:--'})`, fields:[
     {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: MANHÃ ou TARDE'},
     {name:'horario_inicial', label:'Horário Inicial', type:'time', required:true},
-    {name:'horario_final', label:'Horário Final', type:'time', required:true}
+    {name:'horario_final', label:'Horário Final', type:'time', required:true},
+    {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true}
   ]},
   { key:'perfil', label:'Perfil', plural:'Perfis', pk:'codperfil', display:r=>r.descricao, isGlobal:true, fields:[
     {name:'descricao', label:'Descrição do Período', type:'text', required:true, placeholder:'Ex.: Administrador'},
@@ -475,7 +476,7 @@ const ENTITIES = [
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'datacont', label:'Data da Contagem', type:'date', required:true, limitToEvent:true},
     {name:'horacont', label:'Hora da Contagem', type:'time', required:false},
-    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, filterByEvent:true},
     {name:'ativo', label:'Ativo (true/false)', type:'text', required:false, placeholder:'true'}
   ]},
   { key:'pessoa', label:'Pessoa', plural:'Pessoas', pk:'codpessoa', isCustomPessoa:true, display:r=>r.nomecompleto, fields:[
@@ -491,7 +492,7 @@ const ENTITIES = [
   { key:'escalas', label:'Escala', plural:'Escalas', pk:'codescala', isCustomEscalas:true, display:r=>`${formatDateBR(r.data)||''} · ${r.hora_inicio||''}`, fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, onEscalaDataPeriodoChange:true},
-    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onEscalaDataPeriodoChange:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, filterByEvent:true, onEscalaDataPeriodoChange:true},
     {name:'codpessoa', label:'Pessoa', type:'search_fk', ref:'pessoa', required:true, searchable:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'hora_inicio', label:'Hora início', type:'time', required:true, readonly:true},
@@ -500,7 +501,7 @@ const ENTITIES = [
   { key:'contagem', label:'Contagem', plural:'Contagens', pk:'codcont', isCustomContagem:true, display:r=>String(r.quantidade), fields:[
     {name:'codevento', label:'Evento', type:'fk', ref:'evento', required:true, fixedToGlobal:true, hiddenInTable:true},
     {name:'data', label:'Data', type:'date', required:true, limitToEvent:true, activeParamOnly:true, onContagemDataChange:true},
-    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, onContagemPeriodoChange:true},
+    {name:'codperiodo', label:'Período', type:'fk', ref:'periodo', required:true, filterByEvent:true, onContagemPeriodoChange:true},
     {name:'codsetor', label:'Setor', type:'fk', ref:'setor', required:true},
     {name:'codpessoa', label:'Pessoa', type:'search_fk', ref:'pessoa', required:true},
     {name:'quantidade', label:'Quantidade', type:'number', required:true, placeholder:'0'}
@@ -546,6 +547,11 @@ function isEventActive(evento){
 function eventosVisiveisNoLogin(){
   const eventos = Array.isArray(db.evento) ? db.evento : [];
   return eventos.filter(evento => welcomeShowActive ? isEventActive(evento) : !isEventActive(evento));
+}
+function periodosDoEvento(){
+  const periodos = Array.isArray(db.periodo) ? db.periodo : [];
+  if(!globalEventoId) return periodos;
+  return periodos.filter(periodo => Number(periodo.codevento) === Number(globalEventoId));
 }
 function renderWelcomeEventos(preferredId = null){
   const selectWelcome = document.getElementById('welcome-evento-select');
@@ -609,7 +615,7 @@ async function fetchApi(url, options = {}, { retries = 0 } = {}){
 }
 
 async function apiList(table){
-  const query = (table === 'bi' || table === 'pessoadisponibilidade') && globalEventoId ? `?codevento=${encodeURIComponent(globalEventoId)}` : '';
+  const query = (table === 'bi' || table === 'pessoadisponibilidade' || table === 'periodo') && globalEventoId ? `?codevento=${encodeURIComponent(globalEventoId)}` : '';
   const r = await fetchApi(`${API_BASE}/api/${table}${query}`, {}, { retries: 2 });
   if(!r.ok) {
     const errorData = await r.json().catch(() => ({}));
@@ -1233,7 +1239,7 @@ function buildLayout(){
     }
 
     const tableFields = e.fields.filter(f => !f.hiddenInTable && f.type !== 'checkbox_group' && f.type !== 'disponibilidade');
-    const periodos = db['periodo'] || [];
+    const periodos = periodosDoEvento();
     const periodosOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}">${escapeHtml(p.descricao)}</option>`).join('');
 
     if (e.isCustomSetor) {
@@ -1804,7 +1810,7 @@ function renderDashboard(){
   const escalas = (db['escalas']||[]).filter(es => !evId || es.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
   const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
-  const periodos = db['periodo'] || [];
+  const periodos = periodosDoEvento();
 
   let contagensFiltradas = contagens;
   if (dashboardDataFilter !== 'ALL') {
@@ -2000,7 +2006,7 @@ function renderRelatorios(){
   const setores = (db['setor']||[]).filter(s => !evId || s.codevento == evId);
   const contagens = (db['contagem']||[]).filter(ct => !evId || ct.codevento == evId);
   const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
-  const periodos = db['periodo'] || [];
+  const periodos = periodosDoEvento();
   const congs = (db['congregacao']||[]).filter(c => !evId || c.codevento == evId);
   const pessoas = (db['pessoa']||[]).filter(p => !evId || p.codevento == evId);
 
@@ -2463,7 +2469,7 @@ function renderRelatorioCharts(contagens, periodosParametros, setores, congs, pe
 function abrirModalFiltroSetores(){
   const evId = globalEventoId;
   const ev = (db['evento']||[]).find(e => e.codevento == evId);
-  const periodos = db['periodo'] || [];
+  const periodos = periodosDoEvento();
   const parametros = (db['parametros']||[]).filter(p => !evId || p.codevento == evId);
 
   const periodosIdsParametros = new Set(parametros.map(p => String(p.codperiodo)));
@@ -2804,7 +2810,7 @@ function renderDesignacoes(){
   const dateSelectEl = document.getElementById('designacao-date-filter');
   if(dateSelectEl) dateSelectEl.innerHTML = dateOptionsHtml;
 
-  const periodos = db['periodo'] || [];
+  const periodos = periodosDoEvento();
   const periodosOptionsHtml = '<option value="ALL">Todos os Períodos</option>' + periodos.map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(designacaoPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao)}</option>`).join('');
   const periodoSelectEl = document.getElementById('designacao-periodo-filter');
   if(periodoSelectEl) periodoSelectEl.innerHTML = periodosOptionsHtml;
@@ -2844,7 +2850,7 @@ function gerarSugestoesEscalas(){
   escalaSugestoesSomentePresentes=!!(filtroPresentes?.checked || escalaSugestoesSomentePresentes);
   if(!globalEventoId){ showToast('Selecione um evento antes de gerar sugestões.'); return; }
   const eventoSimulacao=(db.evento||[]).find(e=>Number(e.codevento)===Number(globalEventoId));
-  const periodosSimulacao=(db.periodo||[]).filter(p=>p && p.codperiodo !== null && p.codperiodo !== undefined);
+  const periodosSimulacao=periodosDoEvento().filter(p=>p && p.codperiodo !== null && p.codperiodo !== undefined);
   const dataInicioSimulacao=dateOnly(eventoSimulacao?.data_inicio);
   const dataFinalSimulacao=dateOnly(eventoSimulacao?.data_final);
   if(!dataInicioSimulacao || !dataFinalSimulacao){ showToast('O evento não possui período de datas válido para gerar sugestões.'); return; }
@@ -2891,7 +2897,7 @@ function gerarSugestoesEscalas(){
       if(escolhido){
         const repetida=!semRepeticao;
         ocupadosNaExecucao.add(Number(escolhido.codpessoa));
-        resultado.push({codevento:Number(globalEventoId),data:slot.data,codperiodo:slot.codperiodo,codpessoa:Number(escolhido.codpessoa),codsetor:Number(setor.codsetor),hora_inicio:(db.periodo||[]).find(x=>Number(x.codperiodo)===slot.codperiodo)?.horario_inicial||null,hora_fim:(db.periodo||[]).find(x=>Number(x.codperiodo)===slot.codperiodo)?.horario_final||null,__tipo:'sugestao',__repetida:repetida});
+        resultado.push({codevento:Number(globalEventoId),data:slot.data,codperiodo:slot.codperiodo,codpessoa:Number(escolhido.codpessoa),codsetor:Number(setor.codsetor),hora_inicio:periodosDoEvento().find(x=>Number(x.codperiodo)===slot.codperiodo)?.horario_inicial||null,hora_fim:periodosDoEvento().find(x=>Number(x.codperiodo)===slot.codperiodo)?.horario_final||null,__tipo:'sugestao',__repetida:repetida});
       } else {
         // A vaga continua visível para que a simulação nunca esconda um setor pendente.
         // Não é aprovável, pois não existe pessoa elegível conforme a disponibilidade/filtro Presentes.
@@ -2946,7 +2952,7 @@ function renderDisponibilidade(){
     const cong = congregacoes.find(c => Number(c.codcong) === Number(pessoaCongId));
     return normalizeSearchText(`${p.nomecompleto || ''} ${cong?.nome_congregacao || cong?.descricao || cong?.nome || ''}`).includes(disponibilidadeSearch);
   }).sort((a,b) => String(a.nomecompleto || '').localeCompare(String(b.nomecompleto || '')));
-  const periodos = db['periodo'] || [];
+  const periodos = periodosDoEvento();
   const registros = (db['pessoadisponibilidade'] || []).filter(d => !evId || Number(d.codevento) === Number(evId));
   const permitida = disponibilidadePermitida();
   let datas = [];
@@ -3222,7 +3228,7 @@ function mapaEscalaOpcoesData(){
   return html;
 }
 function mapaEscalaOpcoesPeriodo(){
-  return '<option value="ALL">Todos os Períodos</option>' + (db.periodo || []).map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(mapaEscalaPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao || 'Período')}</option>`).join('');
+  return '<option value="ALL">Todos os Períodos</option>' + (periodosDoEvento()).map(p => `<option value="${p.codperiodo}" ${String(p.codperiodo) === String(mapaEscalaPeriodoFilter) ? 'selected' : ''}>${escapeHtml(p.descricao || 'Período')}</option>`).join('');
 }
 function changeMapaEscalaData(value){ mapaEscalaDataFilter = value || 'ALL'; renderMapaComEscalas(); }
 function changeMapaEscalaPeriodo(value){ mapaEscalaPeriodoFilter = value || 'ALL'; renderMapaComEscalas(); }
@@ -3689,7 +3695,7 @@ function openEntityModal(key, id){
         }
       }
 
-      const periodosList = db['periodo'] || [];
+      const periodosList = periodosDoEvento();
 
       let dispHtml = `
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 max-h-72 overflow-y-auto space-y-3 shadow-inner">
@@ -3755,7 +3761,7 @@ function openEntityModal(key, id){
             if (pDisp.length === 0) return false;
             
             const hasIntegral = pDisp.some(d => {
-              const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+              const pItem = periodosDoEvento().find(per => Number(per.codperiodo) === Number(d.codperiodo));
               return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
             });
 
@@ -3783,10 +3789,7 @@ function openEntityModal(key, id){
     } else if(f.type==='fk'){
       const refEnt = entity(f.ref);
       let refList = db[f.ref] || [];
-      if(!refEnt.isGlobal && f.fixedToGlobal && globalEventoId){
-        refList = refList.filter(r => r.codevento == globalEventoId);
-      }
-      if (f.filterByEvent && globalEventoId) {
+      if ((!refEnt.isGlobal || f.filterByEvent) && globalEventoId) {
         refList = refList.filter(r => r.codevento == globalEventoId);
       }
       if (f.sortAlphabetically) {
@@ -3897,12 +3900,12 @@ function openEntityModal(key, id){
       ['setor', 'Setores'], ['congregacao', 'Congregações'], ['parametros', 'Parâmetros'],
       ['pessoa', 'Pessoas'], ['escalas', 'Escalas'], ['contagem', 'Contagens'],
       ['listapresenca', 'Lista de Presença'], ['pessoadisponibilidade', 'Disponibilidade de Pessoas'],
-      ['configmapa', 'Mapa do Evento'], ['relatorios_bi', 'Relatórios BI']
+      ['configmapa', 'Mapa do Evento'], ['relatorios_bi', 'Relatórios BI'], ['periodo', 'Períodos']
     ];
     fieldsEl.insertAdjacentHTML('beforeend', `<div class="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-4">
       <div><h4 class="font-bold text-sm text-slate-900">Replicar dados de outro evento</h4><p class="text-xs text-slate-600 mt-1">Opcional. O novo evento será criado primeiro; depois os registros selecionados serão copiados para ele.</p></div>
       <div><label class="block text-xs font-medium text-slate-600 mb-1.5">Evento de origem</label><select id="evento-replication-source" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm bg-white"><option value="">Não replicar</option>${sourceEvents.map(item => `<option value="${item.codevento}">${escapeHtml(item.descricao)} (#${item.codevento})</option>`).join('')}</select></div>
-      <div><p class="block text-xs font-medium text-slate-600 mb-2">Tabelas a replicar</p><div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white border border-blue-100 rounded-lg p-3 max-h-52 overflow-y-auto">${replicationTables.map(([table,label]) => `<label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"><input type="checkbox" data-replication-table="${table}" class="w-4 h-4 accent-blue-600 rounded">${label}</label>`).join('')}</div><p class="text-[11px] text-slate-500 mt-2">Para replicar Pessoas, selecione Congregações. Para Escalas ou Contagens, selecione também Pessoas e Setores.</p></div>
+      <div><p class="block text-xs font-medium text-slate-600 mb-2">Tabelas a replicar</p><div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white border border-blue-100 rounded-lg p-3 max-h-52 overflow-y-auto">${replicationTables.map(([table,label]) => `<label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"><input type="checkbox" data-replication-table="${table}" class="w-4 h-4 accent-blue-600 rounded">${label}</label>`).join('')}</div><p class="text-[11px] text-slate-500 mt-2">Para replicar Parâmetros, Escalas ou Contagens, selecione também Períodos. Para Pessoas, selecione Congregações; para Escalas ou Contagens, selecione Pessoas e Setores.</p></div>
       <div><label class="block text-xs font-medium text-slate-600 mb-1.5">Senha mestre do administrador</label><input id="evento-replication-password" type="password" autocomplete="new-password" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm bg-white" placeholder="Obrigatória quando houver tabelas selecionadas"><p class="text-[11px] text-slate-500 mt-1">A senha é validada contra um usuário administrador ativo da tabela de usuários.</p></div>
     </div>`);
   }
@@ -3953,7 +3956,7 @@ function getSearchFkList(fieldName) {
         if (pDisp.length === 0) return false;
         
         const hasIntegral = pDisp.some(d => {
-          const pItem = (db['periodo'] || []).find(per => Number(per.codperiodo) === Number(d.codperiodo));
+          const pItem = periodosDoEvento().find(per => Number(per.codperiodo) === Number(d.codperiodo));
           return pItem && pItem.descricao.trim().toUpperCase() === 'INTEGRAL';
         });
 
@@ -4011,7 +4014,7 @@ function onContagemDataChange(){
   const parametrosAtivos = (db['parametros'] || []).filter(p => (!globalEventoId || p.codevento == evId) && p.datacont && dateOnly(p.datacont) === selData && (p.ativo === true || p.ativo === 'true' || Number(p.ativo) === 1));
   const periodosAtivosIds = new Set(parametrosAtivos.map(p => String(p.codperiodo)));
 
-  let refList = (db['periodo'] || []).filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => dateOnly(es.data) === selData && Number(es.codperiodo) === Number(per.codperiodo))));
+  let refList = periodosDoEvento().filter(per => periodosAtivosIds.has(String(per.codperiodo)) && (!isIndicatorAccess || getCurrentIndicatorScales().some(es => dateOnly(es.data) === selData && Number(es.codperiodo) === Number(per.codperiodo))));
   const currentPeriodoVal = periodoSelect.value;
   const opts = refList.map(r=>{
     const rid = r['codperiodo'];
@@ -4092,7 +4095,7 @@ function onEscalaDataPeriodoChange(){
 }
 
 function onEscalaPeriodoChange(codPeriodo){
-  const periodo = (db['periodo']||[]).find(p => String(p.codperiodo) === String(codPeriodo));
+  const periodo = periodosDoEvento().find(p => String(p.codperiodo) === String(codPeriodo));
   const horaInicioInput = document.querySelector('#modal-form [data-field="hora_inicio"]');
   const horaFimInput = document.querySelector('#modal-form [data-field="hora_fim"]');
 
